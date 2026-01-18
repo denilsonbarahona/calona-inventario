@@ -17,16 +17,45 @@ export default function ImageUpload({ images, onImagesChange }: ImageUploadProps
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validar tipo de archivo
+    if (!file.type.startsWith("image/")) {
+      alert("Por favor, selecciona un archivo de imagen válido");
+      return;
+    }
+
+    // Validar tamaño (máximo 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      alert("La imagen es demasiado grande. El tamaño máximo es 5MB");
+      return;
+    }
+
     setUploading(true);
     try {
       const path = `products/${Date.now()}_${file.name}`;
       const url = await uploadImage(file, path);
       onImagesChange([...images, url]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error uploading image:", error);
-      alert("Error al subir la imagen");
+      
+      // Mostrar mensaje de error más específico
+      let errorMessage = "Error al subir la imagen";
+      
+      if (error.code === "storage/unauthorized") {
+        errorMessage = "No tienes permisos para subir imágenes. Contacta al administrador.";
+      } else if (error.code === "storage/canceled") {
+        errorMessage = "La subida de la imagen fue cancelada";
+      } else if (error.code === "storage/unknown") {
+        errorMessage = "Error desconocido al subir la imagen";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(errorMessage);
     } finally {
       setUploading(false);
+      // Limpiar el input para permitir subir el mismo archivo de nuevo
+      e.target.value = "";
     }
   };
 

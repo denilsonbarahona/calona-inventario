@@ -38,6 +38,7 @@ export default function WarehouseTransferPage() {
   const [products, setProducts] = useState<InventoryWarehouse[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
+  const [quantityInputs, setQuantityInputs] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -106,23 +107,32 @@ export default function WarehouseTransferPage() {
     if (existingIndex >= 0) {
       // Si ya está seleccionado, actualizar cantidad
       const updated = [...selectedProducts];
-      updated[existingIndex].quantity = Math.min(
+      const newQuantity = Math.min(
         updated[existingIndex].quantity + 1,
         product.quantity
       );
+      updated[existingIndex].quantity = newQuantity;
       setSelectedProducts(updated);
+      // Actualizar el input también
+      setQuantityInputs({
+        ...quantityInputs,
+        [product.id]: newQuantity.toString(),
+      });
     } else {
       // Agregar nuevo producto
-      setSelectedProducts([
-        ...selectedProducts,
-        {
-          inventoryWarehouseId: product.id,
-          name: product.name,
-          quantity: 1,
-          availableQuantity: product.quantity,
-          variationId: product.variationId,
-        },
-      ]);
+      const newProduct = {
+        inventoryWarehouseId: product.id,
+        name: product.name,
+        quantity: 1,
+        availableQuantity: product.quantity,
+        variationId: product.variationId,
+      };
+      setSelectedProducts([...selectedProducts, newProduct]);
+      // Inicializar el input con "1"
+      setQuantityInputs({
+        ...quantityInputs,
+        [product.id]: "1",
+      });
     }
   };
 
@@ -130,6 +140,10 @@ export default function WarehouseTransferPage() {
     setSelectedProducts(
       selectedProducts.filter((p) => p.inventoryWarehouseId !== inventoryWarehouseId)
     );
+    // Limpiar el input también
+    const newInputs = { ...quantityInputs };
+    delete newInputs[inventoryWarehouseId];
+    setQuantityInputs(newInputs);
   };
 
   const updateProductQuantity = (
@@ -143,7 +157,11 @@ export default function WarehouseTransferPage() {
           : p
       )
     );
-  };
+    // Actualizar el input también
+    setQuantityInputs({
+      ...quantityInputs,
+      [inventoryWarehouseId]: quantity.toString(),
+    });
 
   const handleSubmit = async () => {
     if (!userData || !warehouse || !selectedBranch || selectedProducts.length === 0) {
@@ -412,16 +430,54 @@ export default function WarehouseTransferPage() {
                     <div className="flex items-center space-x-2">
                       <label className="text-sm text-gray-700">Cantidad:</label>
                       <input
-                        type="number"
-                        min={1}
-                        max={selectedProduct.availableQuantity}
-                        value={selectedProduct.quantity}
-                        onChange={(e) =>
-                          updateProductQuantity(
-                            selectedProduct.inventoryWarehouseId,
-                            parseInt(e.target.value) || 1
-                          )
-                        }
+                        type="text"
+                        inputMode="numeric"
+                        value={quantityInputs[selectedProduct.inventoryWarehouseId] || selectedProduct.quantity.toString()}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // Permitir valores vacíos y solo números
+                          if (value === "" || /^\d+$/.test(value)) {
+                            setQuantityInputs({
+                              ...quantityInputs,
+                              [selectedProduct.inventoryWarehouseId]: value,
+                            });
+                            if (value !== "") {
+                              const val = parseInt(value, 10);
+                              if (!isNaN(val)) {
+                                // Validar que no exceda el máximo disponible
+                                const finalVal = Math.min(Math.max(1, val), selectedProduct.availableQuantity);
+                                updateProductQuantity(selectedProduct.inventoryWarehouseId, finalVal);
+                                // Si el valor fue ajustado al máximo, actualizar el input
+                                if (val > selectedProduct.availableQuantity) {
+                                  setQuantityInputs({
+                                    ...quantityInputs,
+                                    [selectedProduct.inventoryWarehouseId]: selectedProduct.availableQuantity.toString(),
+                                  });
+                                }
+                              }
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          // Si está vacío al perder el foco, restaurar a 1
+                          if (e.target.value === "") {
+                            setQuantityInputs({
+                              ...quantityInputs,
+                              [selectedProduct.inventoryWarehouseId]: "1",
+                            });
+                            updateProductQuantity(selectedProduct.inventoryWarehouseId, 1);
+                          } else {
+                            // Asegurar que el input muestre el valor correcto
+                            setQuantityInputs({
+                              ...quantityInputs,
+                              [selectedProduct.inventoryWarehouseId]: selectedProduct.quantity.toString(),
+                            });
+                          }
+                        }}
+                        onFocus={(e) => {
+                          // Seleccionar todo el texto al hacer focus para facilitar reemplazo
+                          e.target.select();
+                        }}
                         className="w-20 px-2 py-1 border border-gray-300 rounded text-gray-900"
                       />
                       <span className="text-sm text-gray-500">unidades</span>

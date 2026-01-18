@@ -24,6 +24,7 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
     variationId: "",
     quantity: 0,
   });
+  const [quantityInput, setQuantityInput] = useState<string>("1");
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [inventory, setInventory] = useState<InventoryBranch[]>([]);
@@ -240,12 +241,43 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad *</label>
         <input
-          type="number"
-          value={formData.quantity}
-          onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })}
+          type="text"
+          inputMode="numeric"
+          value={quantityInput}
+          onChange={(e) => {
+            const value = e.target.value;
+            // Permitir valores vacíos y solo números
+            if (value === "" || /^\d+$/.test(value)) {
+              setQuantityInput(value);
+              if (value !== "") {
+                const val = parseInt(value, 10);
+                if (!isNaN(val)) {
+                  // Validar que no exceda el máximo disponible
+                  const finalVal = Math.min(Math.max(1, val), availableQuantity);
+                  setFormData({ ...formData, quantity: finalVal });
+                  // Si el valor fue ajustado al máximo, actualizar el input
+                  if (val > availableQuantity) {
+                    setQuantityInput(availableQuantity.toString());
+                  }
+                }
+              }
+            }
+          }}
+          onBlur={(e) => {
+            // Si está vacío al perder el foco, restaurar a 1
+            if (e.target.value === "") {
+              setQuantityInput("1");
+              setFormData({ ...formData, quantity: 1 });
+            } else {
+              // Asegurar que el input muestre el valor correcto
+              setQuantityInput(formData.quantity.toString());
+            }
+          }}
+          onFocus={(e) => {
+            // Seleccionar todo el texto al hacer focus para facilitar reemplazo
+            e.target.select();
+          }}
           required
-          min={1}
-          max={availableQuantity}
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
         />
         <p className="text-sm text-gray-500 mt-1">

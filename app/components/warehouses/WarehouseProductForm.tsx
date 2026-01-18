@@ -36,6 +36,7 @@ export default function WarehouseProductForm({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [quantityInput, setQuantityInput] = useState<string>(product?.quantity?.toString() || "1");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,14 +262,26 @@ export default function WarehouseProductForm({
                 </label>
                 <div className="flex space-x-2">
                   <input
-                    type="number"
-                    step="0.01"
-                    value={formData.purchasePrice}
-                    onChange={(e) =>
-                      setFormData({ ...formData, purchasePrice: parseFloat(e.target.value) || 0 })
-                    }
+                    type="text"
+                    inputMode="decimal"
+                    value={formData.purchasePrice || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Permitir valores vacíos y números con decimales
+                      if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                        setFormData({
+                          ...formData,
+                          purchasePrice: value === "" ? 0 : parseFloat(value) || 0,
+                        });
+                      }
+                    }}
+                    onBlur={(e) => {
+                      // Si está vacío al perder el foco, restaurar a 0
+                      if (e.target.value === "") {
+                        setFormData({ ...formData, purchasePrice: 0 });
+                      }
+                    }}
                     required
-                    min={0}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900 placeholder:text-gray-400"
                     placeholder="Precio"
                   />
@@ -284,14 +297,26 @@ export default function WarehouseProductForm({
                 </label>
                 <div className="flex space-x-2">
                   <input
-                    type="number"
-                    step="0.01"
-                    value={formData.salePrice}
-                    onChange={(e) =>
-                      setFormData({ ...formData, salePrice: parseFloat(e.target.value) || 0 })
-                    }
+                    type="text"
+                    inputMode="decimal"
+                    value={formData.salePrice || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Permitir valores vacíos y números con decimales
+                      if (value === "" || /^\d*\.?\d*$/.test(value)) {
+                        setFormData({
+                          ...formData,
+                          salePrice: value === "" ? 0 : parseFloat(value) || 0,
+                        });
+                      }
+                    }}
+                    onBlur={(e) => {
+                      // Si está vacío al perder el foco, restaurar a 0
+                      if (e.target.value === "") {
+                        setFormData({ ...formData, salePrice: 0 });
+                      }
+                    }}
                     required
-                    min={0}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900 placeholder:text-gray-400"
                     placeholder="Precio"
                   />
@@ -307,13 +332,38 @@ export default function WarehouseProductForm({
                 </label>
                 <div className="flex space-x-2">
                   <input
-                    type="number"
-                    value={formData.quantity}
-                    onChange={(e) =>
-                      setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })
-                    }
+                    type="text"
+                    inputMode="numeric"
+                    value={quantityInput}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Permitir valores vacíos y solo números
+                      if (value === "" || /^\d+$/.test(value)) {
+                        setQuantityInput(value);
+                        if (value !== "") {
+                          const val = parseInt(value, 10);
+                          if (!isNaN(val)) {
+                            const finalVal = Math.max(1, val);
+                            setFormData({ ...formData, quantity: finalVal });
+                          }
+                        }
+                      }
+                    }}
+                    onBlur={(e) => {
+                      // Si está vacío al perder el foco, restaurar a 1
+                      if (e.target.value === "") {
+                        setQuantityInput("1");
+                        setFormData({ ...formData, quantity: 1 });
+                      } else {
+                        // Asegurar que el input muestre el valor correcto
+                        setQuantityInput(formData.quantity.toString());
+                      }
+                    }}
+                    onFocus={(e) => {
+                      // Seleccionar todo el texto al hacer focus para facilitar reemplazo
+                      e.target.select();
+                    }}
                     required
-                    min={1}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900 placeholder:text-gray-400"
                     placeholder="Cantidad"
                   />

@@ -28,6 +28,7 @@ export default function SalesForm({ branchId, userId, onSaleComplete }: SalesFor
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState<string>("1");
 
   // Usar React Query para cargar inventario
   const { data: allInventory = [], isLoading: isLoadingInventory, error: inventoryError, refetch: refetchInventory } = useInventoryBranch({
@@ -111,6 +112,7 @@ export default function SalesForm({ branchId, userId, onSaleComplete }: SalesFor
     // Reset
     setSelectedProductId(null);
     setQuantity(1);
+    setQuantityInput("1");
     setSearchTerm("");
   };
 
@@ -236,7 +238,11 @@ export default function SalesForm({ branchId, userId, onSaleComplete }: SalesFor
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setSelectedProductId(item.id)}
+                    onClick={() => {
+                      setSelectedProductId(item.id);
+                      setQuantity(1);
+                      setQuantityInput("1");
+                    }}
                     disabled={isLoadingInventory || item.quantity <= 0}
                     className={`w-full p-3 text-left bg-gray-50 hover:bg-indigo-50 rounded-lg transition-all duration-200 border border-gray-200 hover:border-indigo-300 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                       selectedProductId === item.id ? "bg-indigo-50 border-indigo-300" : ""
@@ -296,14 +302,43 @@ export default function SalesForm({ branchId, userId, onSaleComplete }: SalesFor
             </div>
             <div className="flex gap-2">
               <input
-                type="number"
-                value={quantity}
+                type="text"
+                inputMode="numeric"
+                value={quantityInput}
                 onChange={(e) => {
-                  const val = parseInt(e.target.value) || 1;
-                  setQuantity(Math.min(Math.max(1, val), selectedProduct.quantity));
+                  const value = e.target.value;
+                  // Permitir valores vacíos y solo números
+                  if (value === "" || /^\d+$/.test(value)) {
+                    setQuantityInput(value);
+                    if (value !== "") {
+                      const val = parseInt(value, 10);
+                      if (!isNaN(val)) {
+                        // Validar que no exceda el máximo disponible
+                        const maxQuantity = selectedProduct.quantity;
+                        const finalVal = Math.min(Math.max(1, val), maxQuantity);
+                        setQuantity(finalVal);
+                        // Si el valor fue ajustado al máximo, actualizar el input
+                        if (val > maxQuantity) {
+                          setQuantityInput(maxQuantity.toString());
+                        }
+                      }
+                    }
+                  }
                 }}
-                min={1}
-                max={selectedProduct.quantity}
+                onBlur={(e) => {
+                  // Si está vacío al perder el foco, restaurar a 1
+                  if (e.target.value === "") {
+                    setQuantityInput("1");
+                    setQuantity(1);
+                  } else {
+                    // Asegurar que el input muestre el valor correcto
+                    setQuantityInput(quantity.toString());
+                  }
+                }}
+                onFocus={(e) => {
+                  // Seleccionar todo el texto al hacer focus para facilitar reemplazo
+                  e.target.select();
+                }}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900"
               />
               <button
@@ -372,14 +407,38 @@ export default function SalesForm({ branchId, userId, onSaleComplete }: SalesFor
                       <Minus size={14} className="text-gray-900" />
                     </button>
                     <input
-                      type="number"
-                      value={item.quantity}
+                      type="text"
+                      inputMode="numeric"
+                      value={cart[index].quantity === 0 ? "" : cart[index].quantity.toString()}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value) || 1;
-                        updateCartQuantity(index, val);
+                        const value = e.target.value;
+                        // Permitir valores vacíos y solo números
+                        if (value === "" || /^\d+$/.test(value)) {
+                          if (value === "") {
+                            // Permitir que quede vacío temporalmente
+                            const updatedCart = [...cart];
+                            updatedCart[index] = { ...updatedCart[index], quantity: 0 };
+                            setCart(updatedCart);
+                          } else {
+                            const val = parseInt(value, 10);
+                            if (!isNaN(val)) {
+                              // Validar que no exceda el máximo disponible
+                              const finalVal = Math.min(Math.max(1, val), item.availableStock);
+                              updateCartQuantity(index, finalVal);
+                            }
+                          }
+                        }
                       }}
-                      min={1}
-                      max={item.availableStock}
+                      onBlur={(e) => {
+                        // Si está vacío al perder el foco, restaurar a 1
+                        if (e.target.value === "" || cart[index].quantity === 0) {
+                          updateCartQuantity(index, 1);
+                        }
+                      }}
+                      onFocus={(e) => {
+                        // Seleccionar todo el texto al hacer focus para facilitar reemplazo
+                        e.target.select();
+                      }}
                       className="w-14 px-2 py-1 text-center border border-gray-300 rounded text-xs text-gray-900"
                     />
                     <button
