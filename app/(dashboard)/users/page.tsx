@@ -10,12 +10,14 @@ import {
   deleteDocument,
   updateDocument,
 } from "@/lib/firebase/firestore";
-import { register } from "@/lib/firebase/auth";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "@/lib/firebase/config";
 import { canManageUsers } from "@/lib/utils/permissions";
 import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
 import UserList from "@/app/components/users/UserList";
 import UserForm from "@/app/components/users/UserForm";
 import { Plus } from "lucide-react";
+import { toast } from "react-toastify";
 
 export default function UsersPage() {
   const { userData } = useAuth();
@@ -59,21 +61,46 @@ export default function UsersPage() {
     if (!userData || !data.password) return;
 
     try {
-      // Create Firebase Auth user
-      const userCredential = await register(data.email, data.password);
+      // 1. Validar que el email no exista
+      const { getDocumentsByField } = await import("@/lib/firebase/firestore");
+      const existingUsers = await getDocumentsByField("users", "email", data.email);
+      
+      if (existingUsers.length > 0) {
+        throw new Error("Ya existe un usuario con este email");
+      }
 
-      // Create user document
-      await createDocument("users", {
+      if(!data.branchId) {
+        throw new Error("La sucursal es requerida");
+      }
+
+      // 2. Llamar a la Cloud Function para crear el usuario
+      const createUserFunction = httpsCallable(functions, "createUser");
+      
+      const result = await createUserFunction({
         email: data.email,
+        password: data.password,
         name: data.name,
         role: data.role,
         branchId: data.branchId,
-        createdAt: new Date(),
       });
 
+      // 3. Finalizar
       setShowForm(false);
-      loadUsers();
+      await loadUsers();
+      toast.success("Usuario creado exitosamente");
+      
     } catch (error: any) {
+      console.error("Error al crear usuario:", error);
+      
+      // Manejar errores de la Cloud Function
+      if (error.code === "already-exists") {
+        throw new Error("Ya existe un usuario con este email");
+      }
+      
+      if (error.code === "permission-denied") {
+        throw new Error("No tienes permisos para crear usuarios");
+      }
+      
       throw new Error(error.message || "Error al crear usuario");
     }
   };
@@ -102,12 +129,25 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!userData) return;
+
     try {
-      await deleteDocument("users", id);
-      loadUsers();
-    } catch (error) {
+      // Llamar a la Cloud Function para eliminar el usuario (Firestore + Auth)
+      const deleteUserFunction = httpsCallable(functions, "deleteUser");
+      
+      await deleteUserFunction({ userId: id });
+
+      await loadUsers();
+      toast.success("Usuario eliminado exitosamente");
+    } catch (error: any) {
       console.error("Error deleting user:", error);
-      alert("Error al eliminar el usuario");
+      
+      // Manejar errores de la Cloud Function
+      if (error.code === "permission-denied") {
+        toast.error(error.message || "No tienes permisos para eliminar usuarios");
+      } else {
+        toast.error(error.message || "Error al eliminar el usuario");
+      }
     }
   };
 

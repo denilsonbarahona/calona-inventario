@@ -38,7 +38,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     );
   };
 
-  const menuItems = [
+  // Definir todos los items del menú
+  const allMenuItems = [
     { icon: Home, label: "Inicio", href: "/dashboard" },
     { icon: ShoppingCart, label: "Ventas", href: "/sales" },
     {
@@ -73,6 +74,29 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       ],
     },
   ];
+
+  // Filtrar items según el rol del usuario
+  const menuItems = (() => {
+    if (!userData) return [];
+    
+    if (userData.role === "cashier") {
+      // Cashier solo ve: Ventas y Configuración (solo Perfil)
+      return [
+        { icon: ShoppingCart, label: "Ventas", href: "/sales" },
+        {
+          icon: Settings,
+          label: "Configuración",
+          href: "#",
+          submenu: [
+            { label: "Perfil", href: "/profile" },
+          ],
+        },
+      ];
+    }
+    
+    // Admin y Manager ven todo
+    return allMenuItems;
+  })();
 
   return (
     <>
