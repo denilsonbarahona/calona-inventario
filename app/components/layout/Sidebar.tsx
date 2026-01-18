@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import {
   Home,
-  DollarSign,
   Package,
   ShoppingCart,
   Clock,
@@ -41,15 +40,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const menuItems = [
     { icon: Home, label: "Inicio", href: "/dashboard" },
-    {
-      icon: DollarSign,
-      label: "Finanzas",
-      href: "#",
-      submenu: [
-        { label: "Ingresos", href: "/income" },
-        { label: "Salidas", href: "/expenses" },
-      ],
-    },
+    { icon: ShoppingCart, label: "Ventas", href: "/sales" },
     {
       icon: Package,
       label: "Inventario",
@@ -61,7 +52,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         { label: "Inventario Sucursales", href: "/inventory/branch" },
       ],
     },
-    { icon: ShoppingCart, label: "Ventas", href: "/sales" },
     {
       icon: Clock,
       label: "Reporteria",
@@ -95,25 +85,27 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       )}
       
       <div className={cn(
-        "w-64 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white min-h-screen fixed left-0 top-0 z-50 shadow-2xl border-r border-slate-700/50 transition-transform duration-300",
+        "w-64 bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 text-white min-h-screen fixed left-0 top-0 z-50 shadow-2xl border-r border-indigo-500/30 transition-transform duration-300",
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       )}>
         <div className="p-4 lg:p-6 h-full overflow-y-auto">
-          <div className="flex items-center justify-between mb-6 lg:mb-10 pb-4 lg:pb-6 border-b border-slate-700/50">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6 lg:mb-10 pb-4 lg:pb-6 border-b border-white/20">
             <div className="flex items-center space-x-2 lg:space-x-3">
-              <div className="w-9 h-9 lg:w-11 lg:h-11 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
-                <span className="text-white font-bold text-lg lg:text-xl">C</span>
+              <div className="w-9 h-9 lg:w-11 lg:h-11 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg border border-white/30">
+                <span className="text-white font-bold text-lg lg:text-xl">M</span>
               </div>
-              <span className="text-lg lg:text-xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">Calona</span>
+              <span className="text-lg lg:text-xl font-bold text-white">Macuvi</span>
             </div>
             <button
               onClick={onClose}
-              className="lg:hidden p-1 hover:bg-slate-800 rounded-lg transition-colors"
+              className="lg:hidden p-1 hover:bg-white/10 rounded-lg transition-colors"
             >
-              <X size={20} />
+              <X size={20} className="text-white" />
             </button>
           </div>
 
+          {/* Navigation */}
           <nav className="space-y-1">
             {menuItems.map((item) => {
               const Icon = item.icon;
@@ -127,14 +119,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     <button
                       onClick={() => toggleMenu(item.label)}
                       className={cn(
-                        "w-full flex items-center justify-between px-3 py-2 lg:px-4 lg:py-2.5 rounded-lg transition-all duration-200 group",
+                        "w-full flex items-center justify-between px-3 py-2.5 lg:px-4 lg:py-3 rounded-lg transition-all duration-200 group",
                         isActive
-                          ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30"
-                          : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
+                          ? "bg-white/20 backdrop-blur-sm text-white shadow-lg border border-white/30"
+                          : "text-white/80 hover:bg-white/10 hover:text-white"
                       )}
                     >
-                      <div className="flex items-center space-x-2 lg:space-x-3">
-                        <Icon size={18} className={cn("transition-transform group-hover:scale-110", isActive && "text-white")} />
+                      <div className="flex items-center space-x-3">
+                        <Icon size={18} className="transition-transform group-hover:scale-110" />
                         <span className="font-medium text-sm lg:text-base">{item.label}</span>
                       </div>
                       <ChevronDown
@@ -153,8 +145,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                               className={cn(
                                 "block px-3 py-2 rounded-lg text-xs lg:text-sm transition-all duration-200 font-medium",
                                 isSubActive
-                                  ? "bg-gradient-to-r from-indigo-600/20 to-purple-600/20 text-white border-l-2 border-indigo-400"
-                                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white hover:translate-x-1"
+                                  ? "bg-white/20 text-white border-l-2 border-white shadow-sm"
+                                  : "text-white/70 hover:bg-white/10 hover:text-white hover:translate-x-1"
                               )}
                             >
                               {subItem.label}
@@ -172,13 +164,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   key={item.label}
                   href={item.href}
                   className={cn(
-                    "flex items-center space-x-2 lg:space-x-3 px-3 py-2 lg:px-4 lg:py-2.5 rounded-lg transition-all duration-200 group font-medium",
+                    "flex items-center space-x-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-lg transition-all duration-200 group font-medium",
                     isActive
-                      ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30"
-                      : "text-slate-300 hover:bg-slate-800/50 hover:text-white"
+                      ? "bg-white/20 backdrop-blur-sm text-white shadow-lg border border-white/30"
+                      : "text-white/80 hover:bg-white/10 hover:text-white"
                   )}
                 >
-                  <Icon size={18} className={cn("transition-transform group-hover:scale-110", isActive && "text-white")} />
+                  <Icon size={18} className="transition-transform group-hover:scale-110" />
                   <span className="text-sm lg:text-base">{item.label}</span>
                 </Link>
               );

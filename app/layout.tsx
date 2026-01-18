@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Calona - Sistema de Inventario",
+  title: "Macuvi - Sistema de Inventario",
   description: "Sistema de gestión de inventario para bodegas y sucursales",
 };
 

@@ -5,6 +5,7 @@ import { InventoryBranch } from "@/types";
 import { getDocumentsByField, getDocuments } from "@/lib/firebase/firestore";
 import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
 import { Search, ShoppingCart, X, Plus, Minus } from "lucide-react";
+import { toast } from "react-toastify";
 
 interface SalesFormProps {
   branchId: string;
@@ -89,7 +90,7 @@ export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
       setAllInventory(inventoryItems);
     } catch (error) {
       console.error("Error al cargar inventario:", error);
-      alert("Error al cargar el inventario");
+      toast.error("Error al cargar el inventario");
     }
   };
 
@@ -117,7 +118,7 @@ export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
     if (!product) return;
 
     if (product.quantity < quantity) {
-      alert(`No hay suficiente stock. Disponible: ${product.quantity}`);
+      toast.warning(`No hay suficiente stock. Disponible: ${product.quantity}`);
       return;
     }
 
@@ -145,7 +146,7 @@ export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
       const updatedCart = [...cart];
       const newQuantity = updatedCart[existingIndex].quantity + quantity;
       if (newQuantity > updatedCart[existingIndex].availableStock) {
-        alert(`No hay suficiente stock. Disponible: ${updatedCart[existingIndex].availableStock}`);
+        toast.warning(`No hay suficiente stock. Disponible: ${updatedCart[existingIndex].availableStock}`);
         return;
       }
       updatedCart[existingIndex].quantity = newQuantity;
@@ -174,7 +175,7 @@ export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
 
     const updatedCart = [...cart];
     if (newQuantity > updatedCart[index].availableStock) {
-      alert(`No hay suficiente stock. Disponible: ${updatedCart[index].availableStock}`);
+      toast.warning(`No hay suficiente stock. Disponible: ${updatedCart[index].availableStock}`);
       return;
     }
     updatedCart[index].quantity = newQuantity;
@@ -183,7 +184,7 @@ export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
 
   const handleCheckout = async () => {
     if (cart.length === 0) {
-      alert("El carrito está vacío");
+      toast.warning("El carrito está vacío");
       return;
     }
 
@@ -201,9 +202,9 @@ export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
       setSearchTerm("");
       setFilteredInventory([]);
       await loadInventory();
-      alert("Venta realizada exitosamente");
+      toast.success("Venta realizada exitosamente");
     } catch (error: any) {
-      alert(error.message || "Error al realizar la venta");
+      toast.error(error.message || "Error al realizar la venta");
     } finally {
       setLoading(false);
     }
