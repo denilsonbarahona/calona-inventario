@@ -139,40 +139,54 @@ export default function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
       )}
 
       <div>
-        <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
           Rol *
         </label>
-        <select
-          id="role"
-          value={formData.role}
-          onChange={(e) =>
-            setFormData({ ...formData, role: e.target.value as "admin" | "manager" | "cashier" })
-          }
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
-        >
-          <option value="cashier">Cajero</option>
-          <option value="manager">Manager</option>
-          <option value="admin">Admin</option>
-        </select>
+        <div className="relative">
+          <select
+            id="role"
+            value={formData.role}
+            onChange={(e) =>
+              setFormData({ ...formData, role: e.target.value as "admin" | "manager" | "cashier" })
+            }
+            className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
+          >
+            <option value="cashier">Cajero</option>
+            <option value="manager">Manager</option>
+            <option value="admin">Admin</option>
+          </select>
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       <div>
-        <label htmlFor="branchId" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="branchId" className="block text-sm font-medium text-gray-700 mb-2">
           Sucursal
         </label>
-        <select
-          id="branchId"
-          value={formData.branchId}
-          onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
-        >
-          <option value="">Sin asignar</option>
-          {branches.map((branch) => (
-            <option key={branch.id} value={branch.id}>
-              {branch.name}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            id="branchId"
+            value={formData.branchId}
+            onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+            className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
+          >
+            <option value="">Sin asignar</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       <div className="flex space-x-3">

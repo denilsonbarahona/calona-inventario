@@ -125,67 +125,88 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Sucursal (Origen) *</label>
-        <select
-          value={formData.branchId}
-          onChange={(e) => setFormData({ ...formData, branchId: e.target.value, inventoryBranchId: "", variationId: "" })}
-          required
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
-        >
-          <option value="">Seleccione una sucursal</option>
-          {branches.map((branch) => (
-            <option key={branch.id} value={branch.id}>
-              {branch.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Bodega (Destino) *</label>
-        <select
-          value={formData.warehouseId}
-          onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value })}
-          required
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
-        >
-          <option value="">Seleccione una bodega</option>
-          {warehouses.map((warehouse) => (
-            <option key={warehouse.id} value={warehouse.id}>
-              {warehouse.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Producto *</label>
-        <select
-          value={formData.inventoryBranchId}
-          onChange={(e) =>
-            setFormData({
-              ...formData,
-              inventoryBranchId: e.target.value,
-              variationId: "",
-            })
-          }
-          required
-          disabled={!formData.branchId}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900 disabled:bg-gray-100"
-        >
-          <option value="">Seleccione un producto</option>
-          {inventory.map((item) => {
-            const variation = item.variationId
-              ? item.variations?.find((v) => v.id === item.variationId)
-              : null;
-            return (
-              <option key={item.id} value={item.id}>
-                {item.name}
-                {variation ? ` - ${variation.type}: ${variation.value}` : ""} (Stock: {item.quantity})
+        <label className="block text-sm font-medium text-gray-700 mb-2">Sucursal (Origen) *</label>
+        <div className="relative">
+          <select
+            value={formData.branchId}
+            onChange={(e) => setFormData({ ...formData, branchId: e.target.value, inventoryBranchId: "", variationId: "" })}
+            required
+            className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
+          >
+            <option value="">Seleccione una sucursal</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
               </option>
-            );
-          })}
-        </select>
+            ))}
+          </select>
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Bodega (Destino) *</label>
+        <div className="relative">
+          <select
+            value={formData.warehouseId}
+            onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value })}
+            required
+            className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
+          >
+            <option value="">Seleccione una bodega</option>
+            {warehouses.map((warehouse) => (
+              <option key={warehouse.id} value={warehouse.id}>
+                {warehouse.name}
+              </option>
+            ))}
+          </select>
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Producto *</label>
+        <div className="relative">
+          <select
+            value={formData.inventoryBranchId}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                inventoryBranchId: e.target.value,
+                variationId: "",
+              })
+            }
+            required
+            disabled={!formData.branchId}
+            className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400 disabled:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-500"
+          >
+            <option value="">Seleccione un producto</option>
+            {inventory.map((item) => {
+              const variation = item.variationId
+                ? item.variations?.find((v) => v.id === item.variationId)
+                : null;
+              return (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                  {variation ? ` - ${variation.type}: ${variation.value}` : ""} (Stock: {item.quantity})
+                </option>
+              );
+            })}
+          </select>
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
         {inventory.length === 0 && formData.branchId && (
           <p className="text-sm text-gray-500 mt-1">No hay productos disponibles en esta sucursal</p>
         )}
@@ -193,19 +214,26 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
 
       {selectedInventoryItem && selectedInventoryItem.variations && selectedInventoryItem.variations.length > 0 && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Variación (opcional)</label>
-          <select
-            value={formData.variationId}
-            onChange={(e) => setFormData({ ...formData, variationId: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
-          >
-            <option value="">Sin variación específica</option>
-            {selectedInventoryItem.variations.map((variation) => (
-              <option key={variation.id} value={variation.id}>
-                {variation.type}: {variation.value}
-              </option>
-            ))}
-          </select>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Variación (opcional)</label>
+          <div className="relative">
+            <select
+              value={formData.variationId}
+              onChange={(e) => setFormData({ ...formData, variationId: e.target.value })}
+              className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
+            >
+              <option value="">Sin variación específica</option>
+              {selectedInventoryItem.variations.map((variation) => (
+                <option key={variation.id} value={variation.id}>
+                  {variation.type}: {variation.value}
+                </option>
+              ))}
+            </select>
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
         </div>
       )}
 

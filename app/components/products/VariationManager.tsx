@@ -83,18 +83,25 @@ export default function VariationManager({
       {showForm && (
         <div className="border border-gray-300 rounded-lg p-4 space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
-            <select
-              value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
-            >
-              <option value="">Seleccione tipo</option>
-              <option value="talla">Talla</option>
-              <option value="color">Color</option>
-              <option value="tamaño">Tamaño</option>
-              <option value="otro">Otro</option>
-            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+            <div className="relative">
+              <select
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                className="w-full pl-3 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
+              >
+                <option value="">Seleccione tipo</option>
+                <option value="talla">Talla</option>
+                <option value="color">Color</option>
+                <option value="tamaño">Tamaño</option>
+                <option value="otro">Otro</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Valor</label>

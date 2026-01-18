@@ -133,63 +133,91 @@ export default function WarehouseProductForm({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Tipo de producto
                 </label>
-                <select
-                  value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
-                >
-                  <option value="Producto">Producto</option>
-                  <option value="Servicio">Servicio</option>
-                </select>
+                <div className="relative">
+                  <select
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
+                  >
+                    <option value="Producto">Producto</option>
+                    <option value="Servicio">Servicio</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
-                >
-                  <option value="">Seleccione una categoría</option>
-                  <option value="Electrónica">Electrónica</option>
-                  <option value="Ropa">Ropa</option>
-                  <option value="Alimentos">Alimentos</option>
-                  <option value="Hogar">Hogar</option>
-                  <option value="Otros">Otros</option>
-                </select>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Categoría</label>
+                <div className="relative">
+                  <select
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
+                  >
+                    <option value="">Seleccione una categoría</option>
+                    <option value="Electrónica">Electrónica</option>
+                    <option value="Ropa">Ropa</option>
+                    <option value="Alimentos">Alimentos</option>
+                    <option value="Hogar">Hogar</option>
+                    <option value="Otros">Otros</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Impuesto gravado
                 </label>
-                <select
-                  value={formData.taxStatus}
-                  onChange={(e) => setFormData({ ...formData, taxStatus: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
-                >
-                  <option value="Exento">Exento</option>
-                  <option value="Gravado">Gravado</option>
-                </select>
+                <div className="relative">
+                  <select
+                    value={formData.taxStatus}
+                    onChange={(e) => setFormData({ ...formData, taxStatus: e.target.value })}
+                    className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
+                  >
+                    <option value="Exento">Exento</option>
+                    <option value="Gravado">Gravado</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   ¿El precio incluye el impuesto?
                 </label>
-                <select
-                  value={formData.priceIncludesTax ? "SI" : "NO"}
-                  onChange={(e) =>
-                    setFormData({ ...formData, priceIncludesTax: e.target.value === "SI" })
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
-                >
-                  <option value="SI">SI</option>
-                  <option value="NO">NO</option>
-                </select>
+                <div className="relative">
+                  <select
+                    value={formData.priceIncludesTax ? "SI" : "NO"}
+                    onChange={(e) =>
+                      setFormData({ ...formData, priceIncludesTax: e.target.value === "SI" })
+                    }
+                    className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
+                  >
+                    <option value="SI">SI</option>
+                    <option value="NO">NO</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
               <div>

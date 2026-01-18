@@ -1,18 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { InventoryBranch } from "@/types";
-import { getDocumentsByField, getDocuments } from "@/lib/firebase/firestore";
-import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
+import { useState, useMemo } from "react";
 import { Search, ShoppingCart, X, Plus, Minus } from "lucide-react";
 import { toast } from "react-toastify";
+import { useInventoryBranch } from "@/lib/hooks/useInventory";
+import { useCreateSale } from "@/lib/hooks/useSales";
+import { InventoryBranch } from "@/lib/schemas";
 
 interface SalesFormProps {
   branchId: string;
-  onSubmit: (data: {
-    inventoryBranchId: string;
-    quantity: number;
-  }) => Promise<void>;
+  userId: string;
+  onSaleComplete?: () => void;
 }
 
 interface CartItem {
@@ -25,96 +23,50 @@ interface CartItem {
   availableStock: number;
 }
 
-export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
-  const [allInventory, setAllInventory] = useState<InventoryBranch[]>([]);
-  const [filteredInventory, setFilteredInventory] = useState<InventoryBranch[]>([]);
+export default function SalesForm({ branchId, userId, onSaleComplete }: SalesFormProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (branchId) {
-      loadInventory();
+  // Usar React Query para cargar inventario
+  const { data: allInventory = [], isLoading: isLoadingInventory, error: inventoryError, refetch: refetchInventory } = useInventoryBranch({
+    branchId,
+    enabled: !!branchId,
+  });
+
+  // Debug: Log del inventario cargado
+  useMemo(() => {
+    if (allInventory.length > 0) {
+      console.log("✅ SalesForm: Inventario cargado:", allInventory.length, "productos");
+    } else if (!isLoadingInventory && branchId) {
+      console.warn("⚠️ SalesForm: No se encontraron productos para branchId:", branchId);
     }
-  }, [branchId]);
+  }, [allInventory, isLoadingInventory, branchId]);
 
-  const loadInventory = async () => {
-    if (!branchId) return;
-
-    try {
-      // Primero intentar obtener por branchId
-      let data = await getDocumentsByField("inventory_branch", "branchId", branchId);
-      
-      // Si no encuentra nada, obtener todos y usar transferencias para identificar
-      if (data.length === 0) {
-        const allItems = await getDocuments("inventory_branch");
-        const transfers = await getDocumentsByField("transfers", "branchId", branchId);
-        const inventoryBranchIdsFromTransfers = new Set(
-          transfers.map(t => t.inventoryBranchId).filter(Boolean)
-        );
-        
-        data = allItems.filter(item => 
-          inventoryBranchIdsFromTransfers.has(item.id)
-        );
-        
-        // Actualizar items sin branchId
-        if (data.length > 0) {
-          const { doc, writeBatch, Timestamp } = await import("firebase/firestore");
-          const { db } = await import("@/lib/firebase/config");
-          const batch = writeBatch(db);
-          
-          for (const item of data) {
-            if (!item.branchId) {
-              const itemRef = doc(db, "inventory_branch", item.id);
-              batch.update(itemRef, {
-                branchId: branchId,
-                lastUpdated: Timestamp.now(),
-              });
-            }
-          }
-          
-          await batch.commit();
-        }
-      }
-      
-      const inventoryItems = data
-        .filter((item) => (item.quantity || 0) > 0)
-        .map((item) => ({
-          ...item,
-          branchId: item.branchId || branchId,
-          lastUpdated: convertFirestoreDate(item.lastUpdated),
-        })) as InventoryBranch[];
-
-      setAllInventory(inventoryItems);
-    } catch (error) {
-      console.error("Error al cargar inventario:", error);
-      toast.error("Error al cargar el inventario");
-    }
-  };
-
-  // Filtrar productos cuando se escribe en el buscador
-  useEffect(() => {
+  // Filtrar productos con useMemo en lugar de useEffect
+  const filteredInventory = useMemo(() => {
     if (!searchTerm.trim()) {
-      setFilteredInventory([]);
-      return;
+      return [];
     }
 
     const searchLower = searchTerm.toLowerCase().trim();
-    const filtered = allInventory.filter((item) => {
+    return allInventory.filter((item) => {
       const nameMatch = item.name?.toLowerCase().includes(searchLower) || false;
       const barcodeMatch = item.barcode?.toLowerCase().includes(searchLower) || false;
       return nameMatch || barcodeMatch;
     });
-
-    setFilteredInventory(filtered);
   }, [searchTerm, allInventory]);
+
+  // Filtrar solo productos con stock > 0
+  const availableInventory = useMemo(() => {
+    return allInventory.filter((item) => (item.quantity || 0) > 0);
+  }, [allInventory]);
 
   const addToCart = () => {
     if (!selectedProductId || quantity <= 0) return;
 
-    const product = allInventory.find((item) => item.id === selectedProductId);
+    const product = availableInventory.find((item) => item.id === selectedProductId);
     if (!product) return;
 
     if (product.quantity < quantity) {
@@ -160,7 +112,6 @@ export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
     setSelectedProductId(null);
     setQuantity(1);
     setSearchTerm("");
-    setFilteredInventory([]);
   };
 
   const removeFromCart = (index: number) => {
@@ -182,37 +133,41 @@ export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
     setCart(updatedCart);
   };
 
-  const handleCheckout = async () => {
+  // Hook para crear ventas
+  const { mutate: createSale, isPending: isCreatingSale } = useCreateSale({
+    onSuccess: () => {
+      setCart([]);
+      setSelectedProductId(null);
+      setQuantity(1);
+      setSearchTerm("");
+      refetchInventory();
+      onSaleComplete?.();
+    },
+  });
+
+  const handleCheckout = () => {
     if (cart.length === 0) {
       toast.warning("El carrito está vacío");
       return;
     }
 
-    setLoading(true);
-    try {
-      for (const item of cart) {
-        await onSubmit({
-          inventoryBranchId: item.inventoryBranchId,
-          quantity: item.quantity,
-        });
-      }
-      setCart([]);
-      setSelectedProductId(null);
-      setQuantity(1);
-      setSearchTerm("");
-      setFilteredInventory([]);
-      await loadInventory();
-      toast.success("Venta realizada exitosamente");
-    } catch (error: any) {
-      toast.error(error.message || "Error al realizar la venta");
-    } finally {
-      setLoading(false);
+    // Procesar todas las ventas del carrito
+    // Cada venta se valida automáticamente con Zod en el hook
+    for (const item of cart) {
+      createSale({
+        inventoryBranchId: item.inventoryBranchId,
+        quantity: item.quantity,
+        branchId,
+        userId,
+      });
     }
   };
 
-  const selectedProduct = selectedProductId
-    ? allInventory.find((item) => item.id === selectedProductId)
-    : null;
+  const selectedProduct = useMemo(() => {
+    return selectedProductId
+      ? availableInventory.find((item) => item.id === selectedProductId)
+      : null;
+  }, [selectedProductId, availableInventory]);
 
   const total = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
@@ -233,13 +188,37 @@ export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
           />
         </div>
 
+        {/* Mensaje de error */}
+        {inventoryError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-700">
+              Error al cargar inventario: {inventoryError instanceof Error ? inventoryError.message : "Error desconocido"}
+            </p>
+          </div>
+        )}
+
+        {/* Mensaje cuando no hay productos en la sucursal */}
+        {!isLoadingInventory && !inventoryError && allInventory.length === 0 && !searchTerm.trim() && (
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 mb-4">
+            <Search size={48} className="mb-4 opacity-50" />
+            <p className="text-sm font-medium">No hay productos en esta sucursal</p>
+            <p className="text-xs mt-2">Busca productos o contacta al administrador</p>
+          </div>
+        )}
+
         {/* Lista de productos filtrados (solo se muestra cuando hay búsqueda) */}
         {searchTerm.trim() && (
           <div className="flex-1 overflow-y-auto space-y-2 mb-4">
-            {filteredInventory.length === 0 ? (
+            {isLoadingInventory ? (
+              <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
+                <p className="text-sm">Cargando productos...</p>
+              </div>
+            ) : filteredInventory.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-400">
                 <Search size={48} className="mb-4 opacity-50" />
                 <p className="text-sm">No se encontraron productos</p>
+                <p className="text-xs mt-2">Intenta con otro término de búsqueda</p>
               </div>
             ) : (
               filteredInventory.map((item) => {
@@ -258,7 +237,7 @@ export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
                     key={item.id}
                     type="button"
                     onClick={() => setSelectedProductId(item.id)}
-                    disabled={loading || item.quantity <= 0}
+                    disabled={isLoadingInventory || item.quantity <= 0}
                     className={`w-full p-3 text-left bg-gray-50 hover:bg-indigo-50 rounded-lg transition-all duration-200 border border-gray-200 hover:border-indigo-300 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                       selectedProductId === item.id ? "bg-indigo-50 border-indigo-300" : ""
                     }`}
@@ -431,10 +410,10 @@ export default function SalesForm({ branchId, onSubmit }: SalesFormProps) {
             <button
               type="button"
               onClick={handleCheckout}
-              disabled={loading || cart.length === 0}
+              disabled={isCreatingSale || cart.length === 0}
               className="w-full py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold text-sm"
             >
-              {loading ? "Procesando..." : "Realizar Venta"}
+              {isCreatingSale ? "Procesando..." : "Realizar Venta"}
             </button>
           </div>
         )}
