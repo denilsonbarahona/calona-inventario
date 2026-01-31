@@ -10,7 +10,6 @@ interface TransferFormProps {
     warehouseId: string;
     branchId: string;
     inventoryWarehouseId: string;
-    variationId?: string;
     quantity: number;
   }) => Promise<void>;
   onCancel: () => void;
@@ -21,7 +20,6 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
     warehouseId: "",
     branchId: "",
     inventoryWarehouseId: "",
-    variationId: "",
     quantity: 0,
   });
   const [quantityInput, setQuantityInput] = useState<string>("1");
@@ -41,7 +39,7 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
       loadInventory();
     } else {
       setInventory([]);
-      setFormData((prev) => ({ ...prev, inventoryWarehouseId: "", variationId: "" }));
+      setFormData((prev) => ({ ...prev, inventoryWarehouseId: "" }));
     }
   }, [formData.warehouseId]);
 
@@ -111,7 +109,6 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
         warehouseId: formData.warehouseId,
         branchId: formData.branchId,
         inventoryWarehouseId: formData.inventoryWarehouseId,
-        variationId: formData.variationId || undefined,
         quantity: formData.quantity,
       });
     } catch (err: any) {
@@ -186,7 +183,6 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
               setFormData({
                 ...formData,
                 inventoryWarehouseId: e.target.value,
-                variationId: "",
               })
             }
             required
@@ -195,9 +191,7 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
           >
             <option value="">Seleccione un producto</option>
             {inventory.map((item) => {
-              const variation = item.variationId
-                ? item.variations?.find((v) => v.id === item.variationId)
-                : null;
+              const variation = null; // variationId eliminado
               return (
                 <option key={item.id} value={item.id}>
                   {item.name}
@@ -217,30 +211,6 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
         )}
       </div>
 
-      {selectedInventoryItem && selectedInventoryItem.variations && selectedInventoryItem.variations.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Variación (opcional)</label>
-          <div className="relative">
-            <select
-              value={formData.variationId}
-              onChange={(e) => setFormData({ ...formData, variationId: e.target.value })}
-              className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
-            >
-              <option value="">Sin variación específica</option>
-              {selectedInventoryItem.variations.map((variation) => (
-                <option key={variation.id} value={variation.id}>
-                  {variation.type}: {variation.value}
-                </option>
-              ))}
-            </select>
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad *</label>

@@ -143,7 +143,6 @@ export const useCreateSale = (config?: UseCreateSaleProps) => {
       batch.set(saleRef, {
         branchId,
         inventoryBranchId: branchItem.id,
-        variationId: branchItem.variationId || null,
         quantity,
         unitPrice: salePrice,
         totalPrice: salePrice * quantity,

@@ -29,7 +29,6 @@ export default function ReturnTransferPage() {
     branchId: string;
     warehouseId: string;
     inventoryBranchId: string;
-    variationId?: string;
     quantity: number;
   }) => {
     if (!userData) return;
@@ -55,8 +54,7 @@ export default function ReturnTransferPage() {
       const warehouseItem = warehouseInventory.find(
         (item) =>
           item.name === branchItem.name &&
-          (item.variationId === data.variationId ||
-            (!item.variationId && !data.variationId && !branchItem.variationId))
+          true // variationId eliminado, siempre coincidir por nombre
       );
 
       const batch = writeBatch(db);
@@ -96,7 +94,6 @@ export default function ReturnTransferPage() {
           condition: null,
           images: [], // Images not copied from branch
           variations: branchItem.variations || [],
-          variationId: data.variationId || branchItem.variationId || null,
           quantity: data.quantity,
           purchasePrice: branchItem.purchasePrice,
           salePrice: branchItem.salePrice,
@@ -111,7 +108,6 @@ export default function ReturnTransferPage() {
         branchId: data.branchId,
         inventoryWarehouseId: warehouseItem?.id || null, // May be null if new item
         inventoryBranchId: branchItem.id, // Reference to branch item
-        variationId: data.variationId || null,
         quantity: data.quantity,
         direction: "branch_to_warehouse", // Indicate inverse direction
         transferredBy: userData.id,

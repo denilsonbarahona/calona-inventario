@@ -29,7 +29,6 @@ export default function WarehouseProductForm({
     condition: product?.condition || "",
     images: product?.images || [],
     variations: product?.variations || [] as ProductVariation[],
-    variationId: product?.variationId || "",
     quantity: product?.quantity || 0,
     purchasePrice: product?.purchasePrice || 0,
     salePrice: product?.salePrice || 0,
@@ -82,9 +81,6 @@ export default function WarehouseProductForm({
       }
       if (formData.condition) {
         productData.condition = formData.condition;
-      }
-      if (formData.variationId) {
-        productData.variationId = formData.variationId;
       }
 
       await onSubmit(productData);
@@ -221,37 +217,6 @@ export default function WarehouseProductForm({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Creación variación del producto
-                </label>
-                <VariationManager
-                  variations={formData.variations}
-                  onVariationsChange={(variations) =>
-                    setFormData({ ...formData, variations })
-                  }
-                />
-              </div>
-
-              {formData.variations.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Variación específica (opcional)
-                  </label>
-                  <select
-                    value={formData.variationId}
-                    onChange={(e) => setFormData({ ...formData, variationId: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
-                  >
-                    <option value="">Sin variación específica</option>
-                    {formData.variations.map((variation) => (
-                      <option key={variation.id} value={variation.id}>
-                        {variation.type}: {variation.value}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
             </div>
 
             {/* Right Column - Pricing and Inventory */}
@@ -407,6 +372,17 @@ export default function WarehouseProductForm({
                 </select>
               </div>
             </div>
+          </div>
+
+          {/* Sección de variaciones - Ocupa todo el ancho */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <VariationManager
+              variations={formData.variations}
+              onVariationsChange={(variations) =>
+                setFormData({ ...formData, variations })
+              }
+            />
+
           </div>
 
           <div className="mt-6 flex space-x-3">

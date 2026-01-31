@@ -33,7 +33,6 @@ export default function TransferPage() {
     warehouseId: string;
     branchId: string;
     inventoryWarehouseId: string;
-    variationId?: string;
     quantity: number;
   }) => {
     if (!userData) return;
@@ -59,8 +58,7 @@ export default function TransferPage() {
       const branchItem = branchInventory.find(
         (item) =>
           item.name === warehouseItem.name &&
-          (item.variationId === data.variationId ||
-            (!item.variationId && !data.variationId && !warehouseItem.variationId))
+          true // variationId eliminado, siempre coincidir por nombre
       );
 
       const batch = writeBatch(db);
@@ -94,7 +92,6 @@ export default function TransferPage() {
           // Copy all product information from warehouse
           name: warehouseItem.name,
           productId: warehouseItem.id, // Reference to warehouse item
-          variationId: data.variationId || warehouseItem.variationId || null,
           variations: warehouseItem.variations || [], // Copy variations
           barcode: warehouseItem.barcode || null, // Copy barcode
           quantity: data.quantity,
@@ -110,7 +107,6 @@ export default function TransferPage() {
         warehouseId: data.warehouseId,
         branchId: data.branchId,
         inventoryWarehouseId: warehouseItem.id,
-        variationId: data.variationId || null,
         quantity: data.quantity,
         direction: "warehouse_to_branch", // Indicate normal direction
         transferredBy: userData.id,

@@ -26,7 +26,6 @@ interface SelectedProduct {
   name: string;
   quantity: number;
   availableQuantity: number;
-  variationId?: string;
 }
 
 export default function WarehouseTransferPage() {
@@ -125,7 +124,6 @@ export default function WarehouseTransferPage() {
         name: product.name,
         quantity: 1,
         availableQuantity: product.quantity,
-        variationId: product.variationId,
       };
       setSelectedProducts([...selectedProducts, newProduct]);
       // Inicializar el input con "1"
@@ -196,10 +194,7 @@ export default function WarehouseTransferPage() {
         const branchItem = branchInventory.find(
           (item) =>
             item.name === warehouseItem.name &&
-            (item.variationId === selectedProduct.variationId ||
-              (!item.variationId &&
-                !selectedProduct.variationId &&
-                !warehouseItem.variationId))
+            true // variationId eliminado, siempre coincidir por nombre
         );
 
         // Actualizar inventario de bodega (reducir)
@@ -229,8 +224,6 @@ export default function WarehouseTransferPage() {
             branchId: selectedBranch,
             name: warehouseItem.name,
             productId: warehouseItem.id,
-            variationId:
-              selectedProduct.variationId || warehouseItem.variationId || null,
             variations: warehouseItem.variations || [],
             barcode: warehouseItem.barcode || null,
             quantity: selectedProduct.quantity,
@@ -246,7 +239,6 @@ export default function WarehouseTransferPage() {
           warehouseId: warehouse.id,
           branchId: selectedBranch,
           inventoryWarehouseId: warehouseItem.id,
-          variationId: selectedProduct.variationId || null,
           quantity: selectedProduct.quantity,
           direction: "warehouse_to_branch",
           transferredBy: userData.id,
@@ -327,9 +319,7 @@ export default function WarehouseTransferPage() {
                 </p>
               ) : (
                 products.map((product) => {
-                  const variation = product.variationId
-                    ? product.variations?.find((v) => v.id === product.variationId)
-                    : null;
+                  const variation = null; // variationId eliminado
                   const isSelected = selectedProducts.some(
                     (p) => p.inventoryWarehouseId === product.id
                   );

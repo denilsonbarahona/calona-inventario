@@ -5,7 +5,6 @@ import { Search, ShoppingCart, X, Plus, Minus } from "lucide-react";
 import { toast } from "react-toastify";
 import { useInventoryBranch } from "@/lib/hooks/useInventory";
 import { useCreateSale } from "@/lib/hooks/useSales";
-import { InventoryBranch } from "@/lib/schemas";
 
 interface SalesFormProps {
   branchId: string;
@@ -80,15 +79,10 @@ export default function SalesForm({ branchId, userId, onSaleComplete }: SalesFor
       (item) => item.inventoryBranchId === selectedProductId
     );
 
-    const variation = product.variationId
-      ? product.variations?.find((v) => v.id === product.variationId)
-      : null;
-
     const cartItem: CartItem = {
       inventoryBranchId: product.id,
       quantity,
       name: product.name,
-      variation: variation ? `${variation.type}: ${variation.value}` : undefined,
       unitPrice: product.salePrice || 0,
       purchasePrice: product.purchasePrice || 0,
       availableStock: product.quantity,
@@ -224,10 +218,6 @@ export default function SalesForm({ branchId, userId, onSaleComplete }: SalesFor
               </div>
             ) : (
               filteredInventory.map((item) => {
-                const variation = item.variationId
-                  ? item.variations?.find((v) => v.id === item.variationId)
-                  : null;
-                
                 const variations = item.variations || [];
                 const variationValues = variations.map((v) => v.value).filter(Boolean);
                 const variationsText = variationValues.length > 0 
@@ -253,11 +243,6 @@ export default function SalesForm({ branchId, userId, onSaleComplete }: SalesFor
                         <p className="font-semibold text-sm text-gray-900 mb-1">{item.name}</p>
                         {variationsText && (
                           <p className="text-xs text-gray-500 mb-1">{variationsText}</p>
-                        )}
-                        {variation && (
-                          <p className="text-xs text-gray-500 mb-1">
-                            {variation.type}: {variation.value}
-                          </p>
                         )}
                         {item.barcode && (
                           <p className="text-xs text-gray-400">Código: {item.barcode}</p>

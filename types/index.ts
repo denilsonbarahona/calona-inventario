@@ -60,7 +60,6 @@ export interface InventoryWarehouse {
   images: string[];
   variations: ProductVariation[];
   // Inventario
-  variationId?: string; // Si es una variación específica
   quantity: number;
   purchasePrice: number;
   salePrice: number;
@@ -73,7 +72,6 @@ export interface InventoryBranch {
   // Información del producto (copiada desde bodega)
   name: string;
   productId?: string; // Referencia opcional al producto en bodega (para tracking)
-  variationId?: string;
   variations?: ProductVariation[]; // Variaciones disponibles (copiadas desde bodega)
   quantity: number;
   // Precios (copiados desde bodega al transferir)
@@ -89,7 +87,6 @@ export interface Transfer {
   branchId: string;
   inventoryWarehouseId?: string; // ID del item en inventory_warehouse (para transferencias bodega → sucursal)
   inventoryBranchId?: string; // ID del item en inventory_branch (para transferencias sucursal → bodega)
-  variationId?: string;
   quantity: number;
   direction?: "warehouse_to_branch" | "branch_to_warehouse"; // Dirección de la transferencia
   transferredBy: string;
@@ -100,7 +97,6 @@ export interface Sale {
   id: string;
   branchId: string;
   inventoryBranchId: string; // ID del item en inventory_branch
-  variationId?: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;

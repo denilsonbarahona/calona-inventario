@@ -1,149 +1,211 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ProductVariation } from "@/types";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Trash2 } from "lucide-react";
 
 interface VariationManagerProps {
   variations: ProductVariation[];
   onVariationsChange: (variations: ProductVariation[]) => void;
 }
 
+interface VariationRow {
+  id: string;
+  type: string;
+  value: string;
+  sku: string;
+}
+
 export default function VariationManager({
   variations,
   onVariationsChange,
 }: VariationManagerProps) {
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    type: "",
-    value: "",
-    sku: "",
-  });
+  const [rows, setRows] = useState<VariationRow[]>([]);
 
-  const addVariation = () => {
-    if (!formData.type || !formData.value) return;
+  // Inicializar filas desde las variaciones existentes
+  useEffect(() => {
+    if (variations.length > 0) {
+      setRows(
+        variations.map((v) => ({
+          id: v.id,
+          type: v.type,
+          value: v.value,
+          sku: v.sku || "",
+        }))
+      );
+    } else {
+      // Agregar una fila vacía inicial
+      setRows([
+        {
+          id: Date.now().toString(),
+          type: "",
+          value: "",
+          sku: "",
+        },
+      ]);
+    }
+  }, []);
 
-    const newVariation: ProductVariation = {
-      id: Date.now().toString(),
-      type: formData.type,
-      value: formData.value,
-      sku: formData.sku || undefined,
-    };
+  // Sincronizar cambios de filas con las variaciones
+  const syncVariations = (updatedRows: VariationRow[]) => {
+    const validVariations = updatedRows
+      .filter((row) => row.type && row.value)
+      .map((row) => ({
+        id: row.id,
+        type: row.type,
+        value: row.value,
+        sku: row.sku || undefined,
+      }));
 
-    onVariationsChange([...variations, newVariation]);
-    setFormData({ type: "", value: "", sku: "" });
-    setShowForm(false);
+    onVariationsChange(validVariations);
   };
 
-  const removeVariation = (id: string) => {
-    onVariationsChange(variations.filter((v) => v.id !== id));
+  const updateRow = (id: string, field: keyof VariationRow, value: string) => {
+    const updatedRows = rows.map((row) =>
+      row.id === id ? { ...row, [field]: value } : row
+    );
+    setRows(updatedRows);
+    syncVariations(updatedRows);
+  };
+
+  const addRow = () => {
+    const newRow: VariationRow = {
+      id: Date.now().toString(),
+      type: "",
+      value: "",
+      sku: "",
+    };
+    setRows([...rows, newRow]);
+  };
+
+  const removeRow = (id: string) => {
+    if (rows.length === 1) {
+      // Si solo hay una fila, solo limpiarla
+      setRows([
+        {
+          id: Date.now().toString(),
+          type: "",
+          value: "",
+          sku: "",
+        },
+      ]);
+      onVariationsChange([]);
+    } else {
+      const updatedRows = rows.filter((row) => row.id !== id);
+      setRows(updatedRows);
+      syncVariations(updatedRows);
+    }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <label className="block text-sm font-medium text-gray-700">
+    <div className="w-full">
+      {/* Header */}
+      <div className="mb-4">
+        <label className="block text-sm font-semibold text-gray-800 mb-1">
           Variaciones del producto
         </label>
-        {!showForm && (
-          <button
-            type="button"
-            onClick={() => setShowForm(true)}
-            className="text-purple-600 hover:text-purple-700 text-sm flex items-center space-x-1"
-          >
-            <Plus size={16} />
-            <span>Agregar variación</span>
-          </button>
-        )}
+        <p className="text-xs text-gray-500">
+          Agrega variaciones como talla, color, tamaño, etc.
+        </p>
       </div>
 
-      {variations.length > 0 && (
-        <div className="space-y-2">
-          {variations.map((variation) => (
-            <div
-              key={variation.id}
-              className="flex items-center justify-between bg-gray-50 p-3 rounded-lg"
-            >
-              <div>
-                <span className="font-medium">{variation.type}:</span> {variation.value}
-                {variation.sku && <span className="text-gray-500 ml-2">(SKU: {variation.sku})</span>}
+      {/* Grid de variaciones */}
+      <div className="w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
+        {/* Headers de columnas */}
+        <div className="grid grid-cols-12 gap-4 bg-gray-50 px-4 py-3 border-b border-gray-200">
+          <div className="col-span-4">
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+              Tipo *
+            </label>
+          </div>
+          <div className="col-span-4">
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+              Valor *
+            </label>
+          </div>
+          <div className="col-span-3">
+            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+              SKU (opcional)
+            </label>
+          </div>
+          <div className="col-span-1"></div>
+        </div>
+
+        {/* Filas de variaciones */}
+        <div className="divide-y divide-gray-200">
+          {rows.map((row, index) => (
+            <div key={row.id} className="grid grid-cols-12 gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
+              {/* Tipo */}
+              <div className="col-span-4">
+                <div className="relative">
+                  <select
+                    value={row.type}
+                    onChange={(e) => updateRow(row.id, "type", e.target.value)}
+                    className="w-full pl-3 pr-8 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-sm text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
+                  >
+                    <option value="">Seleccione tipo</option>
+                    <option value="talla">Talla</option>
+                    <option value="color">Color</option>
+                    <option value="tamaño">Tamaño</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => removeVariation(variation.id)}
-                className="text-red-600 hover:text-red-700"
-              >
-                <X size={18} />
-              </button>
+
+              {/* Valor */}
+              <div className="col-span-4">
+                <input
+                  type="text"
+                  value={row.value}
+                  onChange={(e) => updateRow(row.id, "value", e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm text-gray-900 placeholder:text-gray-400 transition-all duration-200"
+                  placeholder="Ej: M, Rojo, Grande"
+                />
+              </div>
+
+              {/* SKU */}
+              <div className="col-span-3">
+                <input
+                  type="text"
+                  value={row.sku}
+                  onChange={(e) => updateRow(row.id, "sku", e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm text-gray-900 placeholder:text-gray-400 transition-all duration-200 font-mono"
+                  placeholder="Código SKU"
+                />
+              </div>
+
+              {/* Botón eliminar */}
+              <div className="col-span-1 flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => removeRow(row.id)}
+                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors duration-200"
+                  title="Eliminar fila"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
-      )}
 
-      {showForm && (
-        <div className="border border-gray-300 rounded-lg p-4 space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
-            <div className="relative">
-              <select
-                value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                className="w-full pl-3 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
-              >
-                <option value="">Seleccione tipo</option>
-                <option value="talla">Talla</option>
-                <option value="color">Color</option>
-                <option value="tamaño">Tamaño</option>
-                <option value="otro">Otro</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Valor</label>
-            <input
-              type="text"
-              value={formData.value}
-              onChange={(e) => setFormData({ ...formData, value: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900 placeholder:text-gray-400"
-              placeholder="Ej: M, Rojo, Grande"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">SKU (opcional)</label>
-            <input
-              type="text"
-              value={formData.sku}
-              onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900 placeholder:text-gray-400"
-              placeholder="Código SKU"
-            />
-          </div>
-          <div className="flex space-x-2">
-            <button
-              type="button"
-              onClick={addVariation}
-              className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700"
-            >
-              Agregar
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowForm(false);
-                setFormData({ type: "", value: "", sku: "" });
-              }}
-              className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300"
-            >
-              Cancelar
-            </button>
-          </div>
+        {/* Botón agregar fila */}
+        <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+          <button
+            type="button"
+            onClick={addRow}
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors duration-200 shadow-sm hover:shadow"
+          >
+            <Plus size={16} />
+            <span>Agregar fila</span>
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
