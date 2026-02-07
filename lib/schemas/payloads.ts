@@ -56,7 +56,13 @@ export const zProductVariationPayload = () =>
     sku: z.string().optional(),
   });
 
-// InventoryWarehouse payloads
+// ProductVariationWithQuantity payload (variación con cantidad)
+export const zProductVariationWithQuantityPayload = () =>
+  zProductVariationPayload().extend({
+    quantity: z.number().min(0, "La cantidad debe ser mayor o igual a 0"),
+  });
+
+// InventoryWarehouse payloads - un doc por producto (variations con quantity)
 export const zCreateInventoryWarehousePayload = () =>
   z.object({
     warehouseId: z.string().min(1, "warehouseId es requerido"),
@@ -68,25 +74,34 @@ export const zCreateInventoryWarehousePayload = () =>
     barcode: z.string().optional(),
     condition: z.string().optional(),
     images: z.array(z.string()),
-    variations: z.array(zProductVariationPayload()),
-    quantity: z.number().int().min(0, "La cantidad debe ser mayor o igual a 0"),
-    purchasePrice: z.number().min(0, "El precio de compra debe ser mayor o igual a 0"),
-    salePrice: z.number().min(0, "El precio de venta debe ser mayor o igual a 0"),
+    hasVariations: z.boolean(),
+    variations: z.array(zProductVariationWithQuantityPayload()),
+    purchasePrice: z
+      .number()
+      .min(0, "El precio de compra debe ser mayor o igual a 0"),
+    salePrice: z
+      .number()
+      .min(0, "El precio de venta debe ser mayor o igual a 0"),
   });
 
 export const zUpdateInventoryWarehousePayload = () =>
   zCreateInventoryWarehousePayload().partial();
 
-// InventoryBranch payloads (para transferencias)
+// InventoryBranch payloads (para transferencias; variations con quantity)
 export const zCreateInventoryBranchPayload = () =>
   z.object({
     branchId: z.string().min(1, "branchId es requerido"),
     name: z.string().min(1, "El nombre es requerido"),
     productId: z.string().optional(),
-    variations: z.array(zProductVariationPayload()).optional(),
+    variation: zProductVariationPayload().nullable().optional(),
+    variations: z.array(zProductVariationWithQuantityPayload()).optional(),
     quantity: z.number().int().min(0, "La cantidad debe ser mayor o igual a 0"),
-    purchasePrice: z.number().min(0, "El precio de compra debe ser mayor o igual a 0"),
-    salePrice: z.number().min(0, "El precio de venta debe ser mayor o igual a 0"),
+    purchasePrice: z
+      .number()
+      .min(0, "El precio de compra debe ser mayor o igual a 0"),
+    salePrice: z
+      .number()
+      .min(0, "El precio de venta debe ser mayor o igual a 0"),
     barcode: z.string().optional(),
   });
 
@@ -107,19 +122,37 @@ export const zCreateTransferPayload = () =>
     inventoryWarehouseId: z.string().optional(),
     inventoryBranchId: z.string().optional(),
     quantity: z.number().int().positive("La cantidad debe ser mayor a 0"),
-    direction: z.enum(["warehouse_to_branch", "branch_to_warehouse"]).optional(),
+    direction: z
+      .enum(["warehouse_to_branch", "branch_to_warehouse"])
+      .optional(),
     transferredBy: z.string().min(1, "transferredBy es requerido"),
   });
 
 // Type exports
 export type CreateUserPayload = z.infer<ReturnType<typeof zCreateUserPayload>>;
 export type UpdateUserPayload = z.infer<ReturnType<typeof zUpdateUserPayload>>;
-export type CreateWarehousePayload = z.infer<ReturnType<typeof zCreateWarehousePayload>>;
-export type UpdateWarehousePayload = z.infer<ReturnType<typeof zUpdateWarehousePayload>>;
-export type CreateBranchPayload = z.infer<ReturnType<typeof zCreateBranchPayload>>;
-export type UpdateBranchPayload = z.infer<ReturnType<typeof zUpdateBranchPayload>>;
-export type CreateInventoryWarehousePayload = z.infer<ReturnType<typeof zCreateInventoryWarehousePayload>>;
-export type UpdateInventoryWarehousePayload = z.infer<ReturnType<typeof zUpdateInventoryWarehousePayload>>;
-export type CreateInventoryBranchPayload = z.infer<ReturnType<typeof zCreateInventoryBranchPayload>>;
+export type CreateWarehousePayload = z.infer<
+  ReturnType<typeof zCreateWarehousePayload>
+>;
+export type UpdateWarehousePayload = z.infer<
+  ReturnType<typeof zUpdateWarehousePayload>
+>;
+export type CreateBranchPayload = z.infer<
+  ReturnType<typeof zCreateBranchPayload>
+>;
+export type UpdateBranchPayload = z.infer<
+  ReturnType<typeof zUpdateBranchPayload>
+>;
+export type CreateInventoryWarehousePayload = z.infer<
+  ReturnType<typeof zCreateInventoryWarehousePayload>
+>;
+export type UpdateInventoryWarehousePayload = z.infer<
+  ReturnType<typeof zUpdateInventoryWarehousePayload>
+>;
+export type CreateInventoryBranchPayload = z.infer<
+  ReturnType<typeof zCreateInventoryBranchPayload>
+>;
 export type CreateSalePayload = z.infer<ReturnType<typeof zCreateSalePayload>>;
-export type CreateTransferPayload = z.infer<ReturnType<typeof zCreateTransferPayload>>;
+export type CreateTransferPayload = z.infer<
+  ReturnType<typeof zCreateTransferPayload>
+>;

@@ -24,6 +24,7 @@ import {
 } from "@/lib/schemas/payloads";
 import { queryKeys } from "@/lib/const/query-keys";
 import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
+import { normalizeWarehouseDoc } from "@/lib/utils/inventoryHelpers";
 
 interface UseInventoryWarehouseProps {
   warehouseId?: string;
@@ -37,26 +38,31 @@ export const useInventoryWarehouse = ({
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.inventoryWarehouse.list(warehouseId),
     queryFn: async () => {
-      let items;
+      let items: Record<string, unknown>[];
       if (warehouseId) {
         items = await getDocumentsByField(
           "inventory_warehouse",
           "warehouseId",
-          warehouseId
+          warehouseId,
         );
       } else {
         items = await getDocuments("inventory_warehouse");
       }
 
-      // Validar respuesta con Zod
-      const parsed = zGetInventoryWarehouseResponse().parse(
-        items.map((item) => ({
+      const normalized = items.map((item) => {
+        const doc = normalizeWarehouseDoc({
           ...item,
-          lastUpdated: convertFirestoreDate(item.lastUpdated),
-        }))
-      );
+          id: (item as { id: string }).id,
+        });
+        return {
+          ...doc,
+          lastUpdated: convertFirestoreDate(item.lastUpdated as unknown),
+        };
+      });
 
-      return parsed;
+      return zGetInventoryWarehouseResponse().parse(
+        normalized,
+      ) as InventoryWarehouse[];
     },
     enabled: enabled && (warehouseId ? true : true),
   });
@@ -86,39 +92,64 @@ export const useInventoryBranch = ({
         return [];
       }
 
-      console.log("🔍 useInventoryBranch: Buscando inventario para branchId:", branchId);
+      console.log(
+        "🔍 useInventoryBranch: Buscando inventario para branchId:",
+        branchId,
+      );
 
       let items = await getDocumentsByField(
         "inventory_branch",
         "branchId",
-        branchId
+        branchId,
       );
 
-      console.log("📦 useInventoryBranch: Items encontrados con branchId:", items.length);
+      console.log(
+        "📦 useInventoryBranch: Items encontrados con branchId:",
+        items.length,
+      );
 
       // Si no encuentra nada, intentar obtener todos y usar transferencias
       if (items.length === 0) {
-        console.log("⚠️ useInventoryBranch: No se encontraron items con branchId, buscando por transferencias...");
+        console.log(
+          "⚠️ useInventoryBranch: No se encontraron items con branchId, buscando por transferencias...",
+        );
         const allItems = await getDocuments("inventory_branch");
-        console.log("📋 useInventoryBranch: Total de items en inventory_branch:", allItems.length);
+        console.log(
+          "📋 useInventoryBranch: Total de items en inventory_branch:",
+          allItems.length,
+        );
 
-        const transfers = await getDocumentsByField("transfers", "branchId", branchId);
-        console.log("🔄 useInventoryBranch: Transferencias encontradas:", transfers.length);
+        const transfers = await getDocumentsByField(
+          "transfers",
+          "branchId",
+          branchId,
+        );
+        console.log(
+          "🔄 useInventoryBranch: Transferencias encontradas:",
+          transfers.length,
+        );
 
         const inventoryBranchIdsFromTransfers = new Set(
-          transfers.map((t: any) => t.inventoryBranchId).filter(Boolean)
+          transfers.map((t: any) => t.inventoryBranchId).filter(Boolean),
         );
-        console.log("🔄 useInventoryBranch: IDs de inventory_branch desde transferencias:", Array.from(inventoryBranchIdsFromTransfers));
+        console.log(
+          "🔄 useInventoryBranch: IDs de inventory_branch desde transferencias:",
+          Array.from(inventoryBranchIdsFromTransfers),
+        );
 
         items = allItems.filter((item: any) =>
-          inventoryBranchIdsFromTransfers.has(item.id)
+          inventoryBranchIdsFromTransfers.has(item.id),
         );
-        console.log("📦 useInventoryBranch: Items filtrados por transferencias:", items.length);
+        console.log(
+          "📦 useInventoryBranch: Items filtrados por transferencias:",
+          items.length,
+        );
 
         // Actualizar items sin branchId
         if (items.length > 0) {
           try {
-            const { doc, writeBatch, Timestamp } = await import("firebase/firestore");
+            const { doc, writeBatch, Timestamp } =
+              await import("firebase/firestore");
             const { db } = await import("@/lib/firebase/config");
             const batch = writeBatch(db);
 
@@ -136,10 +167,16 @@ export const useInventoryBranch = ({
 
             if (updateCount > 0) {
               await batch.commit();
-              console.log("✅ useInventoryBranch: Items actualizados con branchId:", updateCount);
+              console.log(
+                "✅ useInventoryBranch: Items actualizados con branchId:",
+                updateCount,
+              );
             }
           } catch (updateError) {
-            console.error("❌ useInventoryBranch: Error al actualizar items:", updateError);
+            console.error(
+              "❌ useInventoryBranch: Error al actualizar items:",
+              updateError,
+            );
           }
         }
       }
@@ -154,10 +191,16 @@ export const useInventoryBranch = ({
       // Validar respuesta con Zod
       try {
         const parsed = zGetInventoryBranchResponse().parse(itemsToValidate);
-        console.log("✅ useInventoryBranch: Items parseados y validados:", parsed.length);
+        console.log(
+          "✅ useInventoryBranch: Items parseados y validados:",
+          parsed.length,
+        );
         return parsed;
       } catch (validationError) {
-        console.error("❌ useInventoryBranch: Error de validación Zod:", validationError);
+        console.error(
+          "❌ useInventoryBranch: Error de validación Zod:",
+          validationError,
+        );
         // Retornar items sin validar en caso de error (para debugging)
         return itemsToValidate as InventoryBranch[];
       }
@@ -179,7 +222,7 @@ interface UseCreateInventoryWarehouseProps {
 }
 
 export const useCreateInventoryWarehouse = (
-  config?: UseCreateInventoryWarehouseProps
+  config?: UseCreateInventoryWarehouseProps,
 ) => {
   const queryClient = useQueryClient();
 
@@ -187,7 +230,7 @@ export const useCreateInventoryWarehouse = (
     mutationFn: async (payload: CreateInventoryWarehousePayload) => {
       // Validar payload con Zod
       const validated = zCreateInventoryWarehousePayload().parse(payload);
-      
+
       const id = await createDocument("inventory_warehouse", validated);
       return id;
     },
@@ -202,7 +245,10 @@ export const useCreateInventoryWarehouse = (
       config?.onSuccess?.();
     },
     onError: (error: any) => {
-      const errorMessage = error.errors?.[0]?.message || error.message || "Error al crear producto";
+      const errorMessage =
+        error.errors?.[0]?.message ||
+        error.message ||
+        "Error al crear producto";
       toast.error(errorMessage);
       config?.onError?.(error);
     },
@@ -221,7 +267,7 @@ interface UseUpdateInventoryWarehouseProps {
 }
 
 export const useUpdateInventoryWarehouse = (
-  config?: UseUpdateInventoryWarehouseProps
+  config?: UseUpdateInventoryWarehouseProps,
 ) => {
   const queryClient = useQueryClient();
 
@@ -235,7 +281,7 @@ export const useUpdateInventoryWarehouse = (
     }) => {
       // Validar payload con Zod
       const validated = zUpdateInventoryWarehousePayload().parse(data);
-      
+
       await updateDocument("inventory_warehouse", id, validated);
     },
     onSuccess: () => {
@@ -249,7 +295,10 @@ export const useUpdateInventoryWarehouse = (
       config?.onSuccess?.();
     },
     onError: (error: any) => {
-      const errorMessage = error.errors?.[0]?.message || error.message || "Error al actualizar producto";
+      const errorMessage =
+        error.errors?.[0]?.message ||
+        error.message ||
+        "Error al actualizar producto";
       toast.error(errorMessage);
       config?.onError?.(error);
     },
@@ -268,7 +317,7 @@ interface UseDeleteInventoryWarehouseProps {
 }
 
 export const useDeleteInventoryWarehouse = (
-  config?: UseDeleteInventoryWarehouseProps
+  config?: UseDeleteInventoryWarehouseProps,
 ) => {
   const queryClient = useQueryClient();
 
@@ -288,6 +337,45 @@ export const useDeleteInventoryWarehouse = (
     },
     onError: (error: any) => {
       toast.error(error.message || "Error al eliminar producto");
+      config?.onError?.(error);
+    },
+  });
+
+  return {
+    mutate,
+    isPending,
+    error,
+  };
+};
+
+interface UseDeleteInventoryBranchProps {
+  onSuccess?: () => void;
+  onError?: (error: unknown) => void;
+}
+
+export const useDeleteInventoryBranch = (
+  config?: UseDeleteInventoryBranchProps,
+) => {
+  const queryClient = useQueryClient();
+
+  const { mutate, isPending, error } = useMutation({
+    mutationFn: async (id: string) => {
+      await deleteDocument("inventory_branch", id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.inventoryBranch.all,
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboard.stats(),
+      });
+      toast.success("Producto eliminado del inventario de la sucursal");
+      config?.onSuccess?.();
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error ? error.message : "Error al eliminar producto",
+      );
       config?.onError?.(error);
     },
   });

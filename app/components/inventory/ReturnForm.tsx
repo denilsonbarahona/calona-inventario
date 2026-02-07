@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Warehouse, Branch, InventoryBranch } from "@/types";
 import { getDocuments, getDocumentsByField } from "@/lib/firebase/firestore";
 import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
+import { getVariationLabel } from "@/lib/utils/inventoryHelpers";
 
 interface ReturnFormProps {
   onSubmit: (data: {
@@ -49,7 +50,7 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
       data.map((w) => ({
         ...w,
         createdAt: convertFirestoreDate(w.createdAt),
-      })) as Warehouse[]
+      })) as Warehouse[],
     );
   };
 
@@ -59,32 +60,42 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
       data.map((b) => ({
         ...b,
         createdAt: convertFirestoreDate(b.createdAt),
-      })) as Branch[]
+      })) as Branch[],
     );
   };
 
   const loadInventory = async () => {
     if (!formData.branchId) return;
 
-    const data = await getDocumentsByField("inventory_branch", "branchId", formData.branchId);
+    const data = await getDocumentsByField(
+      "inventory_branch",
+      "branchId",
+      formData.branchId,
+    );
     setInventory(
       data
         .filter((item) => (item.quantity || 0) > 0)
         .map((item) => ({
           ...item,
           lastUpdated: convertFirestoreDate(item.lastUpdated),
-        })) as InventoryBranch[]
+        })) as InventoryBranch[],
     );
   };
 
-  const selectedInventoryItem = inventory.find((item) => item.id === formData.inventoryBranchId);
+  const selectedInventoryItem = inventory.find(
+    (item) => item.id === formData.inventoryBranchId,
+  );
   const availableQuantity = selectedInventoryItem?.quantity || 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (!formData.branchId || !formData.warehouseId || !formData.inventoryBranchId) {
+    if (
+      !formData.branchId ||
+      !formData.warehouseId ||
+      !formData.inventoryBranchId
+    ) {
       setError("Todos los campos son requeridos");
       return;
     }
@@ -123,11 +134,19 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Sucursal (Origen) *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Sucursal (Origen) *
+        </label>
         <div className="relative">
           <select
             value={formData.branchId}
-            onChange={(e) => setFormData({ ...formData, branchId: e.target.value, inventoryBranchId: "" })}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                branchId: e.target.value,
+                inventoryBranchId: "",
+              })
+            }
             required
             className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
           >
@@ -139,19 +158,33 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
             ))}
           </select>
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <svg
+              className="w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </div>
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Bodega (Destino) *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Bodega (Destino) *
+        </label>
         <div className="relative">
           <select
             value={formData.warehouseId}
-            onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, warehouseId: e.target.value })
+            }
             required
             className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
           >
@@ -163,15 +196,27 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
             ))}
           </select>
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <svg
+              className="w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </div>
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Producto *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Producto *
+        </label>
         <div className="relative">
           <select
             value={formData.inventoryBranchId}
@@ -187,29 +232,43 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
           >
             <option value="">Seleccione un producto</option>
             {inventory.map((item) => {
-              const variation = null; // variationId eliminado
+              const variationLabel = getVariationLabel(item);
               return (
                 <option key={item.id} value={item.id}>
                   {item.name}
-                  {variation ? ` - ${variation.type}: ${variation.value}` : ""} (Stock: {item.quantity})
+                  {variationLabel ? ` - ${variationLabel}` : ""} (Stock:{" "}
+                  {item.quantity})
                 </option>
               );
             })}
           </select>
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <svg
+              className="w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </div>
         </div>
         {inventory.length === 0 && formData.branchId && (
-          <p className="text-sm text-gray-500 mt-1">No hay productos disponibles en esta sucursal</p>
+          <p className="text-sm text-gray-500 mt-1">
+            No hay productos disponibles en esta sucursal
+          </p>
         )}
       </div>
 
-
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Cantidad *
+        </label>
         <input
           type="text"
           inputMode="numeric"
@@ -223,7 +282,10 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
                 const val = parseInt(value, 10);
                 if (!isNaN(val)) {
                   // Validar que no exceda el máximo disponible
-                  const finalVal = Math.min(Math.max(1, val), availableQuantity);
+                  const finalVal = Math.min(
+                    Math.max(1, val),
+                    availableQuantity,
+                  );
                   setFormData({ ...formData, quantity: finalVal });
                   // Si el valor fue ajustado al máximo, actualizar el input
                   if (val > availableQuantity) {

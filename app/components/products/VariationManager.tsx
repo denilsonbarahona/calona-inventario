@@ -31,7 +31,7 @@ export default function VariationManager({
           type: v.type,
           value: v.value,
           sku: v.sku || "",
-        }))
+        })),
       );
     } else {
       // Agregar una fila vacía inicial
@@ -62,7 +62,7 @@ export default function VariationManager({
 
   const updateRow = (id: string, field: keyof VariationRow, value: string) => {
     const updatedRows = rows.map((row) =>
-      row.id === id ? { ...row, [field]: value } : row
+      row.id === id ? { ...row, [field]: value } : row,
     );
     setRows(updatedRows);
     syncVariations(updatedRows);
@@ -134,7 +134,10 @@ export default function VariationManager({
         {/* Filas de variaciones */}
         <div className="divide-y divide-gray-200">
           {rows.map((row, index) => (
-            <div key={row.id} className="grid grid-cols-12 gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
+            <div
+              key={row.id}
+              className="grid grid-cols-12 gap-4 px-4 py-3 hover:bg-gray-50 transition-colors"
+            >
               {/* Tipo */}
               <div className="col-span-4">
                 <div className="relative">
@@ -150,8 +153,18 @@ export default function VariationManager({
                     <option value="otro">Otro</option>
                   </select>
                   <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    <svg
+                      className="w-4 h-4 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
                     </svg>
                   </div>
                 </div>
@@ -202,7 +215,7 @@ export default function VariationManager({
             className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors duration-200 shadow-sm hover:shadow"
           >
             <Plus size={16} />
-            <span>Agregar fila</span>
+            Agregar fila
           </button>
         </div>
       </div>

@@ -25,11 +25,21 @@ export interface Branch {
   createdBy: string;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+}
+
 export interface ProductVariation {
   id: string;
   type: string; // "talla", "color", "tamaño", etc.
   value: string; // "M", "Rojo", "Grande", etc.
   sku?: string;
+}
+
+/** Variación con cantidad (cantidad dentro de cada variación). */
+export interface ProductVariationWithQuantity extends ProductVariation {
+  quantity: number;
 }
 
 export interface Product {
@@ -49,7 +59,28 @@ export interface Product {
 export interface InventoryWarehouse {
   id: string;
   warehouseId: string;
-  // Información completa del producto (ya no referencia a products)
+  name: string;
+  type: string;
+  category?: string;
+  taxStatus: string;
+  priceIncludesTax: boolean;
+  barcode?: string;
+  condition?: string;
+  images: string[];
+  /** true = producto con variaciones; false = producto único (variación "default"). */
+  hasVariations: boolean;
+  /** Variaciones con cantidad en cada una. Siempre al menos uno. */
+  variations: ProductVariationWithQuantity[];
+  purchasePrice: number;
+  salePrice: number;
+  lastUpdated: Date;
+}
+
+/** Fila aplanada para listados/transferencias (un doc → N filas por variación con cantidad). */
+export interface InventoryWarehouseRow {
+  id: string;
+  rowId: string;
+  warehouseId: string;
   name: string;
   type: string;
   category?: string;
@@ -59,25 +90,30 @@ export interface InventoryWarehouse {
   condition?: string;
   images: string[];
   variations: ProductVariation[];
-  // Inventario
+  variation: ProductVariation;
   quantity: number;
   purchasePrice: number;
   salePrice: number;
   lastUpdated: Date;
+  /** Si se define, se muestra en lugar del label de variation (ej. "Múltiples variaciones"). */
+  variationDisplay?: string;
+  /** Si se define, se muestran debajo del nombre: cada variación con su cantidad (label — quantity). */
+  variationLines?: { label: string; quantity: number }[];
 }
 
 export interface InventoryBranch {
   id: string;
   branchId: string;
-  // Información del producto (copiada desde bodega)
   name: string;
-  productId?: string; // Referencia opcional al producto en bodega (para tracking)
-  variations?: ProductVariation[]; // Variaciones disponibles (copiadas desde bodega)
+  productId?: string;
+  /** Variación de ESTE ítem. null = producto sin variaciones. Un doc = un SKU. */
+  variation?: ProductVariation | null;
+  /** Variaciones con cantidad (un elemento por doc en sucursal). Se deriva quantity de variations[0]?.quantity. */
+  variations?: ProductVariationWithQuantity[];
   quantity: number;
-  // Precios (copiados desde bodega al transferir)
   purchasePrice: number;
   salePrice: number;
-  barcode?: string; // Código de barras (copiado desde bodega)
+  barcode?: string;
   lastUpdated: Date;
 }
 
@@ -85,10 +121,11 @@ export interface Transfer {
   id: string;
   warehouseId: string;
   branchId: string;
-  inventoryWarehouseId?: string; // ID del item en inventory_warehouse (para transferencias bodega → sucursal)
-  inventoryBranchId?: string; // ID del item en inventory_branch (para transferencias sucursal → bodega)
+  inventoryWarehouseId?: string;
+  inventoryBranchId?: string;
+  variationId?: string; // variación transferida (un doc bodega puede tener varias)
   quantity: number;
-  direction?: "warehouse_to_branch" | "branch_to_warehouse"; // Dirección de la transferencia
+  direction?: "warehouse_to_branch" | "branch_to_warehouse";
   transferredBy: string;
   transferredAt: Date;
 }

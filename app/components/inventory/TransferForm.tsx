@@ -2,20 +2,32 @@
 
 import { useState, useEffect } from "react";
 import { Warehouse, Branch, InventoryWarehouse } from "@/types";
+import type { InventoryWarehouseRow } from "@/types";
 import { getDocuments, getDocumentsByField } from "@/lib/firebase/firestore";
 import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
+import {
+  getVariationLabel,
+  flattenWarehouseProduct,
+  normalizeWarehouseDoc,
+} from "@/lib/utils/inventoryHelpers";
+
+const OPTION_VALUE_SEP = "|";
 
 interface TransferFormProps {
   onSubmit: (data: {
     warehouseId: string;
     branchId: string;
     inventoryWarehouseId: string;
+    variationId: string;
     quantity: number;
   }) => Promise<void>;
   onCancel: () => void;
 }
 
-export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) {
+export default function TransferForm({
+  onSubmit,
+  onCancel,
+}: TransferFormProps) {
   const [formData, setFormData] = useState({
     warehouseId: "",
     branchId: "",
@@ -49,7 +61,7 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
       data.map((w) => ({
         ...w,
         createdAt: convertFirestoreDate(w.createdAt),
-      })) as Warehouse[]
+      })) as Warehouse[],
     );
   };
 
@@ -59,7 +71,7 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
       data.map((b) => ({
         ...b,
         createdAt: convertFirestoreDate(b.createdAt),
-      })) as Branch[]
+      })) as Branch[],
     );
   };
 
@@ -69,26 +81,53 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
     const data = await getDocumentsByField(
       "inventory_warehouse",
       "warehouseId",
-      formData.warehouseId
+      formData.warehouseId,
     );
     setInventory(
-      data
-        .filter((item) => (item.quantity || 0) > 0)
-        .map((item) => ({
-          ...item,
-          lastUpdated: convertFirestoreDate(item.lastUpdated),
-        })) as InventoryWarehouse[]
+      data.map((item) => {
+        const normalized = normalizeWarehouseDoc({ ...item, id: item.id });
+        return {
+          ...normalized,
+          lastUpdated: convertFirestoreDate(item.lastUpdated as unknown),
+        } as InventoryWarehouse;
+      }),
     );
   };
 
-  const selectedInventoryItem = inventory.find((item) => item.id === formData.inventoryWarehouseId);
-  const availableQuantity = selectedInventoryItem?.quantity || 0;
+  const inventoryRows: InventoryWarehouseRow[] = inventory
+    .flatMap((doc) =>
+      flattenWarehouseProduct({
+        ...doc,
+        lastUpdated:
+          doc.lastUpdated instanceof Date
+            ? doc.lastUpdated
+            : new Date(doc.lastUpdated as Date),
+      }),
+    )
+    .filter((row) => row.quantity > 0);
+
+  const selectedOptionValue = formData.inventoryWarehouseId;
+  const [selectedProductId, selectedVariationId] = selectedOptionValue.includes(
+    OPTION_VALUE_SEP,
+  )
+    ? selectedOptionValue.split(OPTION_VALUE_SEP)
+    : [selectedOptionValue, "default"];
+  const selectedRow = inventoryRows.find(
+    (row) =>
+      row.id === selectedProductId && row.variation.id === selectedVariationId,
+  );
+  const availableQuantity = selectedRow?.quantity ?? 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (!formData.warehouseId || !formData.branchId || !formData.inventoryWarehouseId) {
+    if (
+      !formData.warehouseId ||
+      !formData.branchId ||
+      !formData.inventoryWarehouseId ||
+      !selectedRow
+    ) {
       setError("Todos los campos son requeridos");
       return;
     }
@@ -108,11 +147,14 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
       await onSubmit({
         warehouseId: formData.warehouseId,
         branchId: formData.branchId,
-        inventoryWarehouseId: formData.inventoryWarehouseId,
+        inventoryWarehouseId: selectedProductId,
+        variationId: selectedVariationId,
         quantity: formData.quantity,
       });
-    } catch (err: any) {
-      setError(err.message || "Error al transferir inventario");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Error al transferir inventario",
+      );
     } finally {
       setLoading(false);
     }
@@ -127,11 +169,19 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Bodega *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Bodega *
+        </label>
         <div className="relative">
           <select
             value={formData.warehouseId}
-            onChange={(e) => setFormData({ ...formData, warehouseId: e.target.value, productId: "" })}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                warehouseId: e.target.value,
+                inventoryWarehouseId: "",
+              })
+            }
             required
             className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
           >
@@ -143,19 +193,33 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
             ))}
           </select>
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <svg
+              className="w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </div>
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Sucursal *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Sucursal *
+        </label>
         <div className="relative">
           <select
             value={formData.branchId}
-            onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, branchId: e.target.value })
+            }
             required
             className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
           >
@@ -167,15 +231,27 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
             ))}
           </select>
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <svg
+              className="w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </div>
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Producto *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Producto *
+        </label>
         <div className="relative">
           <select
             value={formData.inventoryWarehouseId}
@@ -190,30 +266,45 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
             className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400 disabled:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-500"
           >
             <option value="">Seleccione un producto</option>
-            {inventory.map((item) => {
-              const variation = null; // variationId eliminado
+            {inventoryRows.map((row) => {
+              const optionValue = `${row.id}${OPTION_VALUE_SEP}${row.variation.id}`;
+              const variationLabel = getVariationLabel(row);
               return (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                  {variation ? ` - ${variation.type}: ${variation.value}` : ""} (Stock: {item.quantity})
+                <option key={row.rowId} value={optionValue}>
+                  {row.name}
+                  {variationLabel ? ` - ${variationLabel}` : ""} (Stock:{" "}
+                  {row.quantity})
                 </option>
               );
             })}
           </select>
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <svg
+              className="w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </div>
         </div>
-        {inventory.length === 0 && formData.warehouseId && (
-          <p className="text-sm text-gray-500 mt-1">No hay productos disponibles en esta bodega</p>
+        {inventoryRows.length === 0 && formData.warehouseId && (
+          <p className="text-sm text-gray-500 mt-1">
+            No hay productos disponibles en esta bodega
+          </p>
         )}
       </div>
 
-
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Cantidad *
+        </label>
         <input
           type="text"
           inputMode="numeric"
@@ -227,7 +318,10 @@ export default function TransferForm({ onSubmit, onCancel }: TransferFormProps) 
                 const val = parseInt(value, 10);
                 if (!isNaN(val)) {
                   // Validar que no exceda el máximo disponible
-                  const finalVal = Math.min(Math.max(1, val), availableQuantity);
+                  const finalVal = Math.min(
+                    Math.max(1, val),
+                    availableQuantity,
+                  );
                   setFormData({ ...formData, quantity: finalVal });
                   // Si el valor fue ajustado al máximo, actualizar el input
                   if (val > availableQuantity) {

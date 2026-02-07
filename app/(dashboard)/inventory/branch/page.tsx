@@ -4,10 +4,18 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { InventoryBranch, Branch } from "@/types";
-import { getDocuments, getDocumentsByField } from "@/lib/firebase/firestore";
+import {
+  getDocuments,
+  getDocumentsByField,
+  deleteDocument,
+} from "@/lib/firebase/firestore";
 import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
+import { getVariationLabel } from "@/lib/utils/inventoryHelpers";
 import InventoryTable from "@/app/components/inventory/InventoryTable";
-import { canTransferInventory } from "@/lib/utils/permissions";
+import {
+  canTransferInventory,
+  canManageProducts,
+} from "@/lib/utils/permissions";
 import { ArrowLeft } from "lucide-react";
 
 export default function BranchInventoryPage() {
@@ -37,7 +45,7 @@ export default function BranchInventoryPage() {
         data.map((b) => ({
           ...b,
           createdAt: convertFirestoreDate(b.createdAt),
-        })) as Branch[]
+        })) as Branch[],
       );
     } catch (error) {
       console.error("Error loading branches:", error);
@@ -50,15 +58,43 @@ export default function BranchInventoryPage() {
     if (!selectedBranch) return;
 
     try {
-      const data = await getDocumentsByField("inventory_branch", "branchId", selectedBranch);
+      const data = await getDocumentsByField(
+        "inventory_branch",
+        "branchId",
+        selectedBranch,
+      );
       setInventory(
         data.map((item) => ({
           ...item,
           lastUpdated: convertFirestoreDate(item.lastUpdated),
-        })) as InventoryBranch[]
+        })) as InventoryBranch[],
       );
     } catch (error) {
       console.error("Error loading inventory:", error);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const item = inventory.find((i) => i.id === id);
+    const variationLabel = item ? getVariationLabel(item) : null;
+    const label = item
+      ? variationLabel
+        ? `${item.name} (${variationLabel})`
+        : item.name
+      : "este producto";
+    if (
+      !window.confirm(
+        `¿Eliminar "${label}" del inventario de esta sucursal? Esta acción no se puede deshacer.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteDocument("inventory_branch", id);
+      await loadInventory();
+    } catch (error) {
+      console.error("Error al eliminar:", error);
+      alert("No se pudo eliminar. Intenta de nuevo.");
     }
   };
 
@@ -69,7 +105,9 @@ export default function BranchInventoryPage() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Inventario de Sucursales</h1>
+        <h1 className="text-3xl font-bold text-gray-800">
+          Inventario de Sucursales
+        </h1>
         {userData && canTransferInventory(userData.role) && (
           <button
             onClick={() => router.push("/inventory/branch/transfer")}
@@ -82,7 +120,9 @@ export default function BranchInventoryPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Seleccionar Sucursal</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Seleccionar Sucursal
+        </label>
         <div className="relative w-full md:w-64">
           <select
             value={selectedBranch}
@@ -97,14 +137,34 @@ export default function BranchInventoryPage() {
             ))}
           </select>
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <svg
+              className="w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </div>
         </div>
       </div>
 
-      {selectedBranch && <InventoryTable inventory={inventory} type="branch" />}
+      {selectedBranch && (
+        <InventoryTable
+          inventory={inventory}
+          type="branch"
+          onDelete={
+            userData && canManageProducts(userData.role)
+              ? handleDelete
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }

@@ -5,13 +5,16 @@ import { Transfer, Warehouse, Branch, InventoryWarehouse, User } from "@/types";
 import { getDocuments, getDocument } from "@/lib/firebase/firestore";
 import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
 import { format } from "date-fns";
+import { normalizeWarehouseDoc } from "@/lib/utils/inventoryHelpers";
 
 export default function TransfersReportPage() {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [warehouses, setWarehouses] = useState<Record<string, Warehouse>>({});
   const [branches, setBranches] = useState<Record<string, Branch>>({});
-  const [inventoryItems, setInventoryItems] = useState<Record<string, InventoryWarehouse>>({});
+  const [inventoryItems, setInventoryItems] = useState<
+    Record<string, InventoryWarehouse>
+  >({});
   const [users, setUsers] = useState<Record<string, User>>({});
 
   useEffect(() => {
@@ -26,17 +29,23 @@ export default function TransfersReportPage() {
         transferredAt: convertFirestoreDate(t.transferredAt),
       })) as Transfer[];
 
-      setTransfers(transfersData.sort((a, b) => b.transferredAt.getTime() - a.transferredAt.getTime()));
+      setTransfers(
+        transfersData.sort(
+          (a, b) => b.transferredAt.getTime() - a.transferredAt.getTime(),
+        ),
+      );
 
       // Load related data
-      const warehouseIds = [...new Set(transfersData.map((t) => t.warehouseId))];
+      const warehouseIds = [
+        ...new Set(transfersData.map((t) => t.warehouseId)),
+      ];
       const branchIds = [...new Set(transfersData.map((t) => t.branchId))];
       const userIds = [...new Set(transfersData.map((t) => t.transferredBy))];
       const inventoryWarehouseIds = [
         ...new Set(
           transfersData
             .map((t) => t.inventoryWarehouseId)
-            .filter((id): id is string => !!id)
+            .filter((id): id is string => !!id),
         ),
       ];
 
@@ -66,13 +75,13 @@ export default function TransfersReportPage() {
         }
       }
 
-      // Obtener productos desde inventory_warehouse
       for (const id of inventoryWarehouseIds) {
-        const inventoryItem = await getDocument("inventory_warehouse", id);
-        if (inventoryItem) {
+        const raw = await getDocument("inventory_warehouse", id);
+        if (raw) {
+          const normalized = normalizeWarehouseDoc({ ...raw, id: raw.id });
           inventoryMap[id] = {
-            ...inventoryItem,
-            lastUpdated: convertFirestoreDate(inventoryItem.lastUpdated),
+            ...normalized,
+            lastUpdated: convertFirestoreDate(raw.lastUpdated as unknown),
           } as InventoryWarehouse;
         }
       }
@@ -90,7 +99,9 @@ export default function TransfersReportPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Reporte de Transferencias</h1>
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">
+        Reporte de Transferencias
+      </h1>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         {loading ? (
@@ -122,7 +133,10 @@ export default function TransfersReportPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {transfers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                  <td
+                    colSpan={6}
+                    className="px-6 py-4 text-center text-gray-500"
+                  >
                     No hay transferencias registradas
                   </td>
                 </tr>
@@ -131,15 +145,19 @@ export default function TransfersReportPage() {
                   // Determinar origen y destino basándose en la dirección
                   const isWarehouseToBranch =
                     transfer.direction === "warehouse_to_branch" ||
-                    (!transfer.direction && transfer.warehouseId && transfer.branchId);
-                  
+                    (!transfer.direction &&
+                      transfer.warehouseId &&
+                      transfer.branchId);
+
                   const origin = isWarehouseToBranch
-                    ? warehouses[transfer.warehouseId]?.name || transfer.warehouseId
+                    ? warehouses[transfer.warehouseId]?.name ||
+                      transfer.warehouseId
                     : branches[transfer.branchId]?.name || transfer.branchId;
-                  
+
                   const destination = isWarehouseToBranch
                     ? branches[transfer.branchId]?.name || transfer.branchId
-                    : warehouses[transfer.warehouseId]?.name || transfer.warehouseId;
+                    : warehouses[transfer.warehouseId]?.name ||
+                      transfer.warehouseId;
 
                   return (
                     <tr key={transfer.id} className="hover:bg-gray-50">
@@ -154,15 +172,30 @@ export default function TransfersReportPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {transfer.inventoryWarehouseId
-                          ? inventoryItems[transfer.inventoryWarehouseId]?.name ||
-                            "Producto no encontrado"
+                          ? (() => {
+                              const item =
+                                inventoryItems[transfer.inventoryWarehouseId!];
+                              if (!item) return "Producto no encontrado";
+                              const variationId = (
+                                transfer as Transfer & { variationId?: string }
+                              ).variationId;
+                              if (variationId && item.variations?.length) {
+                                const v = item.variations.find(
+                                  (x) => x.id === variationId,
+                                );
+                                if (v)
+                                  return `${item.name} (${v.type}: ${v.value})`;
+                              }
+                              return item.name;
+                            })()
                           : "N/A"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {transfer.quantity}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {users[transfer.transferredBy]?.name || transfer.transferredBy}
+                        {users[transfer.transferredBy]?.name ||
+                          transfer.transferredBy}
                       </td>
                     </tr>
                   );

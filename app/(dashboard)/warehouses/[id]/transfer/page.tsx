@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { canTransferInventory } from "@/lib/utils/permissions";
 import { Warehouse, Branch, InventoryWarehouse } from "@/types";
+import type { ProductVariation } from "@/types";
 import {
   getDocument,
   getDocuments,
@@ -12,17 +13,25 @@ import {
 } from "@/lib/firebase/firestore";
 import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
 import {
-  doc,
-  collection,
-  deleteDoc,
-  writeBatch,
-  Timestamp,
-} from "firebase/firestore";
+  getVariationLabel,
+  getDisplayVariation,
+  getQuantityByVariation,
+  flattenWarehouseProduct,
+  normalizeWarehouseDoc,
+} from "@/lib/utils/inventoryHelpers";
+import type { InventoryWarehouseRow } from "@/types";
+import { doc, collection, writeBatch, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { Package, ArrowRight, X } from "lucide-react";
 
+function selectionKey(productId: string, variationId: string) {
+  return `${productId}_${variationId}`;
+}
+
 interface SelectedProduct {
   inventoryWarehouseId: string;
+  variationId: string;
+  variation: ProductVariation;
   name: string;
   quantity: number;
   availableQuantity: number;
@@ -36,8 +45,12 @@ export default function WarehouseTransferPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [products, setProducts] = useState<InventoryWarehouse[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
-  const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
-  const [quantityInputs, setQuantityInputs] = useState<Record<string, string>>({});
+  const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>(
+    [],
+  );
+  const [quantityInputs, setQuantityInputs] = useState<Record<string, string>>(
+    {},
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -72,7 +85,7 @@ export default function WarehouseTransferPage() {
         data.map((b) => ({
           ...b,
           createdAt: convertFirestoreDate(b.createdAt),
-        })) as Branch[]
+        })) as Branch[],
       );
     } catch (error) {
       console.error("Error loading branches:", error);
@@ -84,85 +97,98 @@ export default function WarehouseTransferPage() {
       const data = await getDocumentsByField(
         "inventory_warehouse",
         "warehouseId",
-        params.id as string
+        params.id as string,
       );
       setProducts(
-        data
-          .filter((item) => (item.quantity || 0) > 0)
-          .map((item) => ({
-            ...item,
-            lastUpdated: convertFirestoreDate(item.lastUpdated),
-          })) as InventoryWarehouse[]
+        data.map((item) => {
+          const normalized = normalizeWarehouseDoc({ ...item, id: item.id });
+          return {
+            ...normalized,
+            lastUpdated: convertFirestoreDate(item.lastUpdated as unknown),
+          } as InventoryWarehouse;
+        }),
       );
     } catch (error) {
       console.error("Error loading products:", error);
     }
   };
 
-  const addProductToSelection = (product: InventoryWarehouse) => {
+  const productRows: InventoryWarehouseRow[] = products
+    .flatMap((d) =>
+      flattenWarehouseProduct({
+        ...d,
+        lastUpdated:
+          d.lastUpdated instanceof Date
+            ? d.lastUpdated
+            : new Date(d.lastUpdated as Date),
+      }),
+    )
+    .filter((row) => row.quantity > 0);
+
+  const addProductToSelection = (row: InventoryWarehouseRow) => {
+    const key = selectionKey(row.id, row.variation.id);
     const existingIndex = selectedProducts.findIndex(
-      (p) => p.inventoryWarehouseId === product.id
+      (p) => selectionKey(p.inventoryWarehouseId, p.variationId) === key,
     );
     if (existingIndex >= 0) {
-      // Si ya está seleccionado, actualizar cantidad
       const updated = [...selectedProducts];
       const newQuantity = Math.min(
         updated[existingIndex].quantity + 1,
-        product.quantity
+        row.quantity,
       );
       updated[existingIndex].quantity = newQuantity;
       setSelectedProducts(updated);
-      // Actualizar el input también
-      setQuantityInputs({
-        ...quantityInputs,
-        [product.id]: newQuantity.toString(),
-      });
+      setQuantityInputs((prev) => ({ ...prev, [key]: newQuantity.toString() }));
     } else {
-      // Agregar nuevo producto
-      const newProduct = {
-        inventoryWarehouseId: product.id,
-        name: product.name,
-        quantity: 1,
-        availableQuantity: product.quantity,
-      };
-      setSelectedProducts([...selectedProducts, newProduct]);
-      // Inicializar el input con "1"
-      setQuantityInputs({
-        ...quantityInputs,
-        [product.id]: "1",
-      });
+      setSelectedProducts([
+        ...selectedProducts,
+        {
+          inventoryWarehouseId: row.id,
+          variationId: row.variation.id,
+          variation: row.variation,
+          name: row.name,
+          quantity: 1,
+          availableQuantity: row.quantity,
+        },
+      ]);
+      setQuantityInputs((prev) => ({ ...prev, [key]: "1" }));
     }
   };
 
-  const removeProductFromSelection = (inventoryWarehouseId: string) => {
+  const removeProductFromSelection = (key: string) => {
     setSelectedProducts(
-      selectedProducts.filter((p) => p.inventoryWarehouseId !== inventoryWarehouseId)
+      selectedProducts.filter(
+        (p) => selectionKey(p.inventoryWarehouseId, p.variationId) !== key,
+      ),
     );
-    // Limpiar el input también
-    const newInputs = { ...quantityInputs };
-    delete newInputs[inventoryWarehouseId];
-    setQuantityInputs(newInputs);
+    setQuantityInputs((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   };
 
-  const updateProductQuantity = (
-    inventoryWarehouseId: string,
-    quantity: number
-  ) => {
+  const updateProductQuantity = (key: string, quantity: number) => {
     setSelectedProducts(
-      selectedProducts.map((p) =>
-        p.inventoryWarehouseId === inventoryWarehouseId
-          ? { ...p, quantity: Math.min(Math.max(1, quantity), p.availableQuantity) }
-          : p
-      )
+      selectedProducts.map((p) => {
+        if (selectionKey(p.inventoryWarehouseId, p.variationId) !== key)
+          return p;
+        return {
+          ...p,
+          quantity: Math.min(Math.max(1, quantity), p.availableQuantity),
+        };
+      }),
     );
-    // Actualizar el input también
-    setQuantityInputs({
-      ...quantityInputs,
-      [inventoryWarehouseId]: quantity.toString(),
-    });
+    setQuantityInputs((prev) => ({ ...prev, [key]: quantity.toString() }));
+  };
 
   const handleSubmit = async () => {
-    if (!userData || !warehouse || !selectedBranch || selectedProducts.length === 0) {
+    if (
+      !userData ||
+      !warehouse ||
+      !selectedBranch ||
+      selectedProducts.length === 0
+    ) {
       setError("Selecciona una sucursal y al menos un producto");
       return;
     }
@@ -172,73 +198,148 @@ export default function WarehouseTransferPage() {
 
     try {
       const batch = writeBatch(db);
+      /** Cantidades pendientes por doc de bodega (para un solo update por doc). */
+      const pendingQuantitiesByDocId: Record<
+        string,
+        Record<string, number>
+      > = {};
+      const warehouseDocIdsUpdated = new Set<string>();
 
-      // Procesar cada producto seleccionado
+      /** Un doc por producto en sucursal: productId → { existingId?, name, variations[], ... }. Se fusionan variaciones al transferir. */
+      interface BranchPending {
+        existingId?: string;
+        name: string;
+        productId: string;
+        variations: {
+          id: string;
+          type: string;
+          value: string;
+          sku?: string;
+          quantity: number;
+        }[];
+        purchasePrice: number;
+        salePrice: number;
+        barcode?: string | null;
+      }
+      const pendingBranchByProductId: Record<string, BranchPending> = {};
+
+      const branchInventory = await getDocumentsByField(
+        "inventory_branch",
+        "branchId",
+        selectedBranch,
+      );
+
       for (const selectedProduct of selectedProducts) {
-        const warehouseItem = products.find(
-          (p) => p.id === selectedProduct.inventoryWarehouseId
+        const warehouseDoc = products.find(
+          (p) => p.id === selectedProduct.inventoryWarehouseId,
         );
-
-        if (!warehouseItem || warehouseItem.quantity < selectedProduct.quantity) {
+        if (!warehouseDoc) {
+          throw new Error(`Producto no encontrado: ${selectedProduct.name}`);
+        }
+        const currentQty = getQuantityByVariation(
+          warehouseDoc,
+          selectedProduct.variationId,
+        );
+        if (currentQty < selectedProduct.quantity) {
           throw new Error(
-            `No hay suficiente inventario de ${selectedProduct.name}`
+            `No hay suficiente inventario de ${selectedProduct.name}`,
           );
         }
 
-        // Obtener inventario de sucursal para verificar si el producto ya existe
-        const branchInventory = await getDocumentsByField(
-          "inventory_branch",
-          "branchId",
-          selectedBranch
-        );
-        const branchItem = branchInventory.find(
-          (item) =>
-            item.name === warehouseItem.name &&
-            true // variationId eliminado, siempre coincidir por nombre
-        );
-
-        // Actualizar inventario de bodega (reducir)
-        const newWarehouseQuantity = warehouseItem.quantity - selectedProduct.quantity;
-        if (newWarehouseQuantity === 0) {
-          const warehouseRef = doc(db, "inventory_warehouse", warehouseItem.id);
-          await deleteDoc(warehouseRef);
-        } else {
-          const warehouseRef = doc(db, "inventory_warehouse", warehouseItem.id);
-          batch.update(warehouseRef, {
-            quantity: newWarehouseQuantity,
-            lastUpdated: Timestamp.now(),
+        if (!pendingQuantitiesByDocId[warehouseDoc.id]) {
+          pendingQuantitiesByDocId[warehouseDoc.id] = {};
+          warehouseDoc.variations?.forEach((v) => {
+            pendingQuantitiesByDocId[warehouseDoc.id][v.id] = v.quantity ?? 0;
           });
         }
+        const pending = pendingQuantitiesByDocId[warehouseDoc.id];
+        const newQty = Math.max(
+          0,
+          (pending[selectedProduct.variationId] ?? 0) -
+            selectedProduct.quantity,
+        );
+        pending[selectedProduct.variationId] = newQty;
+        if (newQty === 0) {
+          delete pending[selectedProduct.variationId];
+        }
+        warehouseDocIdsUpdated.add(warehouseDoc.id);
 
-        // Actualizar o crear inventario de sucursal (aumentar)
-        if (branchItem) {
-          const branchRef = doc(db, "inventory_branch", branchItem.id);
-          batch.update(branchRef, {
-            branchId: selectedBranch, // Asegurar que tenga branchId
-            quantity: branchItem.quantity + selectedProduct.quantity,
-            lastUpdated: Timestamp.now(),
-          });
+        const productId = warehouseDoc.id;
+        let branchPending = pendingBranchByProductId[productId];
+        if (!branchPending) {
+          const existing = branchInventory.find(
+            (item) => item.productId === productId,
+          );
+          let existingVariations: {
+            id: string;
+            type: string;
+            value: string;
+            sku?: string;
+            quantity: number;
+          }[] = [];
+          if (existing?.variations?.length) {
+            existingVariations = existing.variations.map(
+              (v: {
+                id: string;
+                type: string;
+                value: string;
+                sku?: string;
+                quantity?: number;
+              }) => ({
+                id: v.id,
+                type: v.type,
+                value: v.value,
+                sku: v.sku,
+                quantity: v.quantity ?? 0,
+              }),
+            );
+          } else if (existing?.variation) {
+            const v = getDisplayVariation(existing);
+            if (v)
+              existingVariations = [
+                {
+                  id: v.id,
+                  type: v.type,
+                  value: v.value,
+                  sku: v.sku,
+                  quantity: existing.quantity ?? 0,
+                },
+              ];
+          }
+          branchPending = {
+            existingId: existing?.id,
+            name: warehouseDoc.name,
+            productId,
+            variations: existingVariations,
+            purchasePrice: warehouseDoc.purchasePrice,
+            salePrice: warehouseDoc.salePrice,
+            barcode: warehouseDoc.barcode ?? null,
+          };
+          pendingBranchByProductId[productId] = branchPending;
+        }
+
+        const idx = branchPending.variations.findIndex(
+          (v) => v.id === selectedProduct.variationId,
+        );
+        if (idx >= 0) {
+          branchPending.variations[idx].quantity += selectedProduct.quantity;
         } else {
-          const branchRef = doc(collection(db, "inventory_branch"));
-          batch.set(branchRef, {
-            branchId: selectedBranch,
-            name: warehouseItem.name,
-            productId: warehouseItem.id,
-            variations: warehouseItem.variations || [],
-            barcode: warehouseItem.barcode || null,
+          const v = selectedProduct.variation;
+          branchPending.variations.push({
+            id: v.id,
+            type: v.type,
+            value: v.value,
+            ...(v.sku != null && v.sku !== "" ? { sku: v.sku } : {}),
             quantity: selectedProduct.quantity,
-            purchasePrice: warehouseItem.purchasePrice,
-            salePrice: warehouseItem.salePrice,
-            lastUpdated: Timestamp.now(),
           });
         }
 
-        // Crear registro de transferencia
         const transferRef = doc(collection(db, "transfers"));
         batch.set(transferRef, {
           warehouseId: warehouse.id,
           branchId: selectedBranch,
-          inventoryWarehouseId: warehouseItem.id,
+          inventoryWarehouseId: warehouseDoc.id,
+          variationId: selectedProduct.variationId,
           quantity: selectedProduct.quantity,
           direction: "warehouse_to_branch",
           transferredBy: userData.id,
@@ -246,10 +347,82 @@ export default function WarehouseTransferPage() {
         });
       }
 
+      const variationsForFirestore = (
+        variations: {
+          id: string;
+          type: string;
+          value: string;
+          sku?: string | null;
+          quantity: number;
+        }[],
+      ) =>
+        variations.map((v) => ({
+          id: v.id,
+          type: v.type,
+          value: v.value,
+          quantity: v.quantity,
+          ...(v.sku != null && v.sku !== "" ? { sku: v.sku } : {}),
+        }));
+
+      for (const productId of Object.keys(pendingBranchByProductId)) {
+        const branchPending = pendingBranchByProductId[productId];
+        const totalQty = branchPending.variations.reduce(
+          (sum, v) => sum + v.quantity,
+          0,
+        );
+        const variationsPayload = variationsForFirestore(
+          branchPending.variations,
+        );
+        if (branchPending.existingId) {
+          const branchRef = doc(
+            db,
+            "inventory_branch",
+            branchPending.existingId,
+          );
+          batch.update(branchRef, {
+            variations: variationsPayload,
+            quantity: totalQty,
+            lastUpdated: Timestamp.now(),
+          });
+        } else {
+          const branchRef = doc(collection(db, "inventory_branch"));
+          batch.set(branchRef, {
+            branchId: selectedBranch,
+            name: branchPending.name,
+            productId: branchPending.productId,
+            variations: variationsPayload,
+            barcode: branchPending.barcode ?? null,
+            quantity: totalQty,
+            purchasePrice: branchPending.purchasePrice,
+            salePrice: branchPending.salePrice,
+            lastUpdated: Timestamp.now(),
+          });
+        }
+      }
+
+      for (const docId of warehouseDocIdsUpdated) {
+        const warehouseDoc = products.find((p) => p.id === docId);
+        if (!warehouseDoc) continue;
+        const pending = pendingQuantitiesByDocId[docId] ?? {};
+        const newVariations = (warehouseDoc.variations ?? []).map((v) => ({
+          ...v,
+          quantity: pending[v.id] ?? 0,
+        }));
+        const warehouseRef = doc(db, "inventory_warehouse", docId);
+        batch.update(warehouseRef, {
+          variations: newVariations,
+          lastUpdated: Timestamp.now(),
+        });
+      }
+
       await batch.commit();
       router.push(`/warehouses/${warehouse.id}`);
-    } catch (error: any) {
-      setError(error.message || "Error al transferir inventario");
+    } catch (error: unknown) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Error al transferir inventario",
+      );
     } finally {
       setLoading(false);
     }
@@ -301,8 +474,18 @@ export default function WarehouseTransferPage() {
                 ))}
               </select>
               <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <svg
+                  className="w-5 h-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
                 </svg>
               </div>
             </div>
@@ -313,19 +496,22 @@ export default function WarehouseTransferPage() {
               Productos Disponibles en {warehouse.name}
             </h2>
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {products.length === 0 ? (
+              {productRows.length === 0 ? (
                 <p className="text-gray-500 text-center py-4">
                   No hay productos disponibles en esta bodega
                 </p>
               ) : (
-                products.map((product) => {
-                  const variation = null; // variationId eliminado
+                productRows.map((row) => {
+                  const variationLabel = getVariationLabel(row);
+                  const key = selectionKey(row.id, row.variation.id);
                   const isSelected = selectedProducts.some(
-                    (p) => p.inventoryWarehouseId === product.id
+                    (p) =>
+                      selectionKey(p.inventoryWarehouseId, p.variationId) ===
+                      key,
                   );
                   return (
                     <div
-                      key={product.id}
+                      key={row.rowId}
                       className={`border rounded-lg p-3 ${
                         isSelected
                           ? "border-purple-500 bg-purple-50"
@@ -335,31 +521,31 @@ export default function WarehouseTransferPage() {
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <div className="flex items-center space-x-2">
-                            {product.images && product.images.length > 0 && (
+                            {row.images && row.images.length > 0 && (
                               <img
-                                src={product.images[0]}
-                                alt={product.name}
+                                src={row.images[0]}
+                                alt={row.name}
                                 className="h-10 w-10 rounded object-cover"
                               />
                             )}
                             <div>
                               <p className="font-medium text-gray-900">
-                                {product.name}
+                                {row.name}
                               </p>
-                              {variation && (
+                              {variationLabel && (
                                 <p className="text-sm text-gray-600">
-                                  {variation.type}: {variation.value}
+                                  {variationLabel}
                                 </p>
                               )}
                               <p className="text-sm text-gray-500">
-                                Stock: {product.quantity} unidades
+                                Stock: {row.quantity} unidades
                               </p>
                             </div>
                           </div>
                         </div>
                         <button
-                          onClick={() => addProductToSelection(product)}
-                          disabled={isSelected || product.quantity === 0}
+                          onClick={() => addProductToSelection(row)}
+                          disabled={isSelected || row.quantity === 0}
                           className="ml-4 px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
                         >
                           {isSelected ? "Seleccionado" : "Agregar"}
@@ -389,12 +575,14 @@ export default function WarehouseTransferPage() {
           ) : (
             <div className="space-y-4">
               {selectedProducts.map((selectedProduct) => {
-                const product = products.find(
-                  (p) => p.id === selectedProduct.inventoryWarehouseId
+                const key = selectionKey(
+                  selectedProduct.inventoryWarehouseId,
+                  selectedProduct.variationId,
                 );
+                const variationLabel = getVariationLabel(selectedProduct);
                 return (
                   <div
-                    key={selectedProduct.inventoryWarehouseId}
+                    key={key}
                     className="border border-gray-200 rounded-lg p-4"
                   >
                     <div className="flex justify-between items-start mb-2">
@@ -402,16 +590,18 @@ export default function WarehouseTransferPage() {
                         <p className="font-medium text-gray-900">
                           {selectedProduct.name}
                         </p>
+                        {variationLabel && (
+                          <p className="text-sm font-medium text-purple-600 mt-0.5">
+                            Variación: {variationLabel}
+                          </p>
+                        )}
                         <p className="text-sm text-gray-500">
-                          Disponible: {selectedProduct.availableQuantity} unidades
+                          Disponible: {selectedProduct.availableQuantity}{" "}
+                          unidades
                         </p>
                       </div>
                       <button
-                        onClick={() =>
-                          removeProductFromSelection(
-                            selectedProduct.inventoryWarehouseId
-                          )
-                        }
+                        onClick={() => removeProductFromSelection(key)}
                         className="text-red-600 hover:text-red-700"
                       >
                         <X size={20} />
@@ -422,52 +612,52 @@ export default function WarehouseTransferPage() {
                       <input
                         type="text"
                         inputMode="numeric"
-                        value={quantityInputs[selectedProduct.inventoryWarehouseId] || selectedProduct.quantity.toString()}
+                        value={
+                          quantityInputs[key] ??
+                          selectedProduct.quantity.toString()
+                        }
                         onChange={(e) => {
                           const value = e.target.value;
-                          // Permitir valores vacíos y solo números
                           if (value === "" || /^\d+$/.test(value)) {
-                            setQuantityInputs({
-                              ...quantityInputs,
-                              [selectedProduct.inventoryWarehouseId]: value,
-                            });
+                            setQuantityInputs((prev) => ({
+                              ...prev,
+                              [key]: value,
+                            }));
                             if (value !== "") {
                               const val = parseInt(value, 10);
                               if (!isNaN(val)) {
-                                // Validar que no exceda el máximo disponible
-                                const finalVal = Math.min(Math.max(1, val), selectedProduct.availableQuantity);
-                                updateProductQuantity(selectedProduct.inventoryWarehouseId, finalVal);
-                                // Si el valor fue ajustado al máximo, actualizar el input
-                                if (val > selectedProduct.availableQuantity) {
-                                  setQuantityInputs({
-                                    ...quantityInputs,
-                                    [selectedProduct.inventoryWarehouseId]: selectedProduct.availableQuantity.toString(),
-                                  });
+                                const maxQty =
+                                  selectedProduct.availableQuantity;
+                                const finalVal = Math.min(
+                                  Math.max(1, val),
+                                  maxQty,
+                                );
+                                updateProductQuantity(key, finalVal);
+                                if (val > maxQty) {
+                                  setQuantityInputs((prev) => ({
+                                    ...prev,
+                                    [key]: maxQty.toString(),
+                                  }));
                                 }
                               }
                             }
                           }
                         }}
                         onBlur={(e) => {
-                          // Si está vacío al perder el foco, restaurar a 1
                           if (e.target.value === "") {
-                            setQuantityInputs({
-                              ...quantityInputs,
-                              [selectedProduct.inventoryWarehouseId]: "1",
-                            });
-                            updateProductQuantity(selectedProduct.inventoryWarehouseId, 1);
+                            setQuantityInputs((prev) => ({
+                              ...prev,
+                              [key]: "1",
+                            }));
+                            updateProductQuantity(key, 1);
                           } else {
-                            // Asegurar que el input muestre el valor correcto
-                            setQuantityInputs({
-                              ...quantityInputs,
-                              [selectedProduct.inventoryWarehouseId]: selectedProduct.quantity.toString(),
-                            });
+                            setQuantityInputs((prev) => ({
+                              ...prev,
+                              [key]: selectedProduct.quantity.toString(),
+                            }));
                           }
                         }}
-                        onFocus={(e) => {
-                          // Seleccionar todo el texto al hacer focus para facilitar reemplazo
-                          e.target.select();
-                        }}
+                        onFocus={(e) => e.target.select()}
                         className="w-20 px-2 py-1 border border-gray-300 rounded text-gray-900"
                       />
                       <span className="text-sm text-gray-500">unidades</span>
@@ -490,28 +680,21 @@ export default function WarehouseTransferPage() {
                     Total de unidades:
                   </span>
                   <span className="font-bold text-gray-900">
-                    {selectedProducts.reduce(
-                      (sum, p) => sum + p.quantity,
-                      0
-                    )}{" "}
+                    {selectedProducts.reduce((sum, p) => sum + p.quantity, 0)}{" "}
                     unidades
                   </span>
                 </div>
                 <button
                   onClick={handleSubmit}
                   disabled={
-                    loading ||
-                    !selectedBranch ||
-                    selectedProducts.length === 0
+                    loading || !selectedBranch || selectedProducts.length === 0
                   }
                   className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                 >
                   <ArrowRight size={20} />
-                  <span>
-                    {loading
-                      ? "Transferiendo..."
-                      : `Transferir a ${branches.find((b) => b.id === selectedBranch)?.name || "Sucursal"}`}
-                  </span>
+                  {loading
+                    ? "Transferiendo..."
+                    : `Transferir a ${branches.find((b) => b.id === selectedBranch)?.name || "Sucursal"}`}
                 </button>
               </div>
             </div>

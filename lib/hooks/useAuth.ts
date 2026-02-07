@@ -18,31 +18,33 @@ export const useAuth = () => {
         try {
           const userDoc = await getDocument("users", firebaseUser.uid);
           if (userDoc) {
+            const { createdAt: _createdAt, ...rest } = userDoc;
             setUserData({
-              ...userDoc,
-              createdAt: userDoc.createdAt?.toDate() || new Date(),
+              ...rest,
             } as User);
           } else {
             // Si no existe el documento, crear uno básico
-            console.warn("Usuario autenticado pero sin documento en Firestore. Creando documento básico...");
+            console.warn(
+              "Usuario autenticado pero sin documento en Firestore. Creando documento básico...",
+            );
             try {
               const { doc, setDoc } = await import("firebase/firestore");
               const { db } = await import("@/lib/firebase/config");
-              const { Timestamp } = await import("firebase/firestore");
-              
+
               const basicUserData = {
                 email: firebaseUser.email || "",
-                name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Usuario",
+                name:
+                  firebaseUser.displayName ||
+                  firebaseUser.email?.split("@")[0] ||
+                  "Usuario",
                 role: "cashier" as const,
-                createdAt: Timestamp.now(),
               };
-              
+
               await setDoc(doc(db, "users", firebaseUser.uid), basicUserData);
-              
+
               setUserData({
                 id: firebaseUser.uid,
                 ...basicUserData,
-                createdAt: new Date(),
               } as User);
             } catch (createError) {
               console.error("Error al crear documento básico:", createError);
@@ -50,9 +52,11 @@ export const useAuth = () => {
               setUserData({
                 id: firebaseUser.uid,
                 email: firebaseUser.email || "",
-                name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Usuario",
+                name:
+                  firebaseUser.displayName ||
+                  firebaseUser.email?.split("@")[0] ||
+                  "Usuario",
                 role: "cashier",
-                createdAt: new Date(),
               } as User);
             }
           }
@@ -62,9 +66,11 @@ export const useAuth = () => {
           setUserData({
             id: firebaseUser.uid,
             email: firebaseUser.email || "",
-            name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Usuario",
+            name:
+              firebaseUser.displayName ||
+              firebaseUser.email?.split("@")[0] ||
+              "Usuario",
             role: "cashier",
-            createdAt: new Date(),
           } as User);
         }
       } else {

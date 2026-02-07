@@ -34,7 +34,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const toggleMenu = (menu: string) => {
     setOpenMenus((prev) =>
-      prev.includes(menu) ? prev.filter((m) => m !== menu) : [...prev, menu]
+      prev.includes(menu) ? prev.filter((m) => m !== menu) : [...prev, menu],
     );
   };
 
@@ -70,6 +70,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       href: "#",
       submenu: [
         { label: "Usuarios", href: "/users" },
+        { label: "Categorías", href: "/categories" },
         { label: "Perfil", href: "/profile" },
       ],
     },
@@ -78,7 +79,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   // Filtrar items según el rol del usuario
   const menuItems = (() => {
     if (!userData) return [];
-    
+
     if (userData.role === "cashier") {
       // Cashier solo ve: Ventas y Configuración (solo Perfil)
       return [
@@ -87,13 +88,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           icon: Settings,
           label: "Configuración",
           href: "#",
-          submenu: [
-            { label: "Perfil", href: "/profile" },
-          ],
+          submenu: [{ label: "Perfil", href: "/profile" }],
         },
       ];
     }
-    
+
     // Admin y Manager ven todo
     return allMenuItems;
   })();
@@ -107,19 +106,25 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           onClick={onClose}
         />
       )}
-      
-      <div className={cn(
-        "w-64 bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 text-white min-h-screen fixed left-0 top-0 z-50 shadow-2xl border-r border-indigo-500/30 transition-transform duration-300",
-        isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-      )}>
+
+      <div
+        className={cn(
+          "w-64 bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 text-white min-h-screen fixed left-0 top-0 z-50 shadow-2xl border-r border-indigo-500/30 transition-transform duration-300",
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+        )}
+      >
         <div className="p-4 lg:p-6 h-full overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-6 lg:mb-10 pb-4 lg:pb-6 border-b border-white/20">
             <div className="flex items-center space-x-2 lg:space-x-3">
               <div className="w-9 h-9 lg:w-11 lg:h-11 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg border border-white/30">
-                <span className="text-white font-bold text-lg lg:text-xl">M</span>
+                <span className="text-white font-bold text-lg lg:text-xl">
+                  M
+                </span>
               </div>
-              <span className="text-lg lg:text-xl font-bold text-white">Macuvi</span>
+              <span className="text-lg lg:text-xl font-bold text-white">
+                Macuvi
+              </span>
             </div>
             <button
               onClick={onClose}
@@ -133,7 +138,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <nav className="space-y-1">
             {menuItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+              const isActive =
+                pathname === item.href || pathname?.startsWith(item.href + "/");
               const hasSubmenu = item.submenu && item.submenu.length > 0;
               const isMenuOpen = openMenus.includes(item.label);
 
@@ -146,16 +152,24 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                         "w-full flex items-center justify-between px-3 py-2.5 lg:px-4 lg:py-3 rounded-lg transition-all duration-200 group",
                         isActive
                           ? "bg-white/20 backdrop-blur-sm text-white shadow-lg border border-white/30"
-                          : "text-white/80 hover:bg-white/10 hover:text-white"
+                          : "text-white/80 hover:bg-white/10 hover:text-white",
                       )}
                     >
                       <div className="flex items-center space-x-3">
-                        <Icon size={18} className="transition-transform group-hover:scale-110" />
-                        <span className="font-medium text-sm lg:text-base">{item.label}</span>
+                        <Icon
+                          size={18}
+                          className="transition-transform group-hover:scale-110"
+                        />
+                        <span className="font-medium text-sm lg:text-base">
+                          {item.label}
+                        </span>
                       </div>
                       <ChevronDown
                         size={14}
-                        className={cn("transition-transform duration-200", isMenuOpen && "rotate-180")}
+                        className={cn(
+                          "transition-transform duration-200",
+                          isMenuOpen && "rotate-180",
+                        )}
                       />
                     </button>
                     {isMenuOpen && (
@@ -170,7 +184,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                                 "block px-3 py-2 rounded-lg text-xs lg:text-sm transition-all duration-200 font-medium",
                                 isSubActive
                                   ? "bg-white/20 text-white border-l-2 border-white shadow-sm"
-                                  : "text-white/70 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                                  : "text-white/70 hover:bg-white/10 hover:text-white hover:translate-x-1",
                               )}
                             >
                               {subItem.label}
@@ -191,10 +205,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     "flex items-center space-x-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-lg transition-all duration-200 group font-medium",
                     isActive
                       ? "bg-white/20 backdrop-blur-sm text-white shadow-lg border border-white/30"
-                      : "text-white/80 hover:bg-white/10 hover:text-white"
+                      : "text-white/80 hover:bg-white/10 hover:text-white",
                   )}
                 >
-                  <Icon size={18} className="transition-transform group-hover:scale-110" />
+                  <Icon
+                    size={18}
+                    className="transition-transform group-hover:scale-110"
+                  />
                   <span className="text-sm lg:text-base">{item.label}</span>
                 </Link>
               );

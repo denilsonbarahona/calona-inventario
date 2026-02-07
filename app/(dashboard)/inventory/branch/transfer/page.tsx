@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { canTransferInventory } from "@/lib/utils/permissions";
 import ReturnForm from "@/app/components/inventory/ReturnForm";
-import { getDocumentsByField } from "@/lib/firebase/firestore";
+import { getDocumentsByField, getDocument } from "@/lib/firebase/firestore";
 import { useEffect } from "react";
 import {
   doc,
@@ -14,6 +14,11 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
+import {
+  getDisplayVariation,
+  getQuantityByVariation,
+  normalizeWarehouseDoc,
+} from "@/lib/utils/inventoryHelpers";
 
 export default function ReturnTransferPage() {
   const router = useRouter();
@@ -34,37 +39,28 @@ export default function ReturnTransferPage() {
     if (!userData) return;
 
     try {
-      // Get branch inventory item
-      const branchItem = await getDocumentsByField(
+      const branchItems = await getDocumentsByField(
         "inventory_branch",
         "branchId",
-        data.branchId
-      ).then((items) => items.find((item) => item.id === data.inventoryBranchId));
+        data.branchId,
+      );
+      const branchItem = branchItems.find(
+        (item) => item.id === data.inventoryBranchId,
+      );
 
       if (!branchItem || branchItem.quantity < data.quantity) {
         throw new Error("No hay suficiente inventario en la sucursal");
       }
 
-      // Get warehouse inventory to check if item already exists
-      const warehouseInventory = await getDocumentsByField(
-        "inventory_warehouse",
-        "warehouseId",
-        data.warehouseId
-      );
-      const warehouseItem = warehouseInventory.find(
-        (item) =>
-          item.name === branchItem.name &&
-          true // variationId eliminado, siempre coincidir por nombre
-      );
+      const variation = getDisplayVariation(branchItem);
+      const variationId = variation?.id ?? "default";
 
       const batch = writeBatch(db);
 
-      // Update branch inventory (reduce)
       const newBranchQuantity = branchItem.quantity - data.quantity;
       if (newBranchQuantity === 0) {
-        // Delete if quantity is 0
         const branchRef = doc(db, "inventory_branch", branchItem.id);
-        await deleteDoc(branchRef);
+        batch.delete(branchRef);
       } else {
         const branchRef = doc(db, "inventory_branch", branchItem.id);
         batch.update(branchRef, {
@@ -73,57 +69,109 @@ export default function ReturnTransferPage() {
         });
       }
 
-      // Update or create warehouse inventory (increase) - copy all product information
-      if (warehouseItem) {
-        const warehouseRef = doc(db, "inventory_warehouse", warehouseItem.id);
-        batch.update(warehouseRef, {
-          quantity: warehouseItem.quantity + data.quantity,
-          lastUpdated: Timestamp.now(),
-        });
-      } else {
-        // Create new item in warehouse with all product information from branch
+      const productId = branchItem.productId ?? null;
+      let warehouseDocId: string | null = null;
+
+      if (productId) {
+        const rawWarehouse = await getDocument(
+          "inventory_warehouse",
+          productId,
+        );
+        if (rawWarehouse) {
+          const warehouseDoc = normalizeWarehouseDoc({
+            ...rawWarehouse,
+            id: rawWarehouse.id,
+          });
+          const currentQty = getQuantityByVariation(warehouseDoc, variationId);
+          const newQty = currentQty + data.quantity;
+          const existingIdx = warehouseDoc.variations?.findIndex(
+            (v) => v.id === variationId,
+          );
+          const newVariations =
+            existingIdx !== undefined && existingIdx >= 0
+              ? (warehouseDoc.variations ?? []).map((v, i) =>
+                  i === existingIdx
+                    ? { ...v, quantity: newQty }
+                    : { ...v, quantity: v.quantity ?? 0 },
+                )
+              : [
+                  ...(warehouseDoc.variations ?? []).map((v) => ({
+                    ...v,
+                    quantity: v.quantity ?? 0,
+                  })),
+                  {
+                    ...(variation ?? {
+                      id: variationId,
+                      type: "default",
+                      value: "Único",
+                    }),
+                    quantity: newQty,
+                  },
+                ];
+          const warehouseRef = doc(db, "inventory_warehouse", warehouseDoc.id);
+          batch.update(warehouseRef, {
+            variations: newVariations,
+            lastUpdated: Timestamp.now(),
+          });
+          warehouseDocId = warehouseDoc.id;
+        }
+      }
+
+      if (!warehouseDocId) {
         const warehouseRef = doc(collection(db, "inventory_warehouse"));
+        const variationDef = variation ?? {
+          id: "default",
+          type: "default",
+          value: "Único",
+        };
+        const variationsWithQty = [
+          { ...variationDef, quantity: data.quantity },
+        ];
+        warehouseDocId = warehouseRef.id;
         batch.set(warehouseRef, {
           warehouseId: data.warehouseId,
-          // Copy all product information from branch
           name: branchItem.name,
-          type: "Producto", // Default type
-          taxStatus: "Exento", // Default tax status
-          priceIncludesTax: true, // Default
+          type: "Producto",
+          taxStatus: "Exento",
+          priceIncludesTax: true,
           barcode: branchItem.barcode || null,
           condition: null,
-          images: [], // Images not copied from branch
-          variations: branchItem.variations || [],
-          quantity: data.quantity,
+          images: [],
+          hasVariations: (branchItem.variations?.length ?? 0) > 1,
+          variations: variationsWithQty,
           purchasePrice: branchItem.purchasePrice,
           salePrice: branchItem.salePrice,
           lastUpdated: Timestamp.now(),
         });
       }
 
-      // Create transfer record (inverse direction)
       const transferRef = doc(collection(db, "transfers"));
       batch.set(transferRef, {
         warehouseId: data.warehouseId,
         branchId: data.branchId,
-        inventoryWarehouseId: warehouseItem?.id || null, // May be null if new item
-        inventoryBranchId: branchItem.id, // Reference to branch item
+        inventoryWarehouseId: warehouseDocId,
+        inventoryBranchId: branchItem.id,
+        variationId,
         quantity: data.quantity,
-        direction: "branch_to_warehouse", // Indicate inverse direction
+        direction: "branch_to_warehouse",
         transferredBy: userData.id,
         transferredAt: Timestamp.now(),
       });
 
       await batch.commit();
       router.push("/inventory/branch");
-    } catch (error: any) {
-      throw new Error(error.message || "Error al retornar inventario");
+    } catch (error: unknown) {
+      throw new Error(
+        error instanceof Error ? error.message : "Error al retornar inventario",
+      );
     }
   };
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Retornar Inventario a Bodega</h1>
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">
+        Retornar Inventario a Bodega
+      </h1>
       <div className="bg-white rounded-lg shadow p-6">
         <ReturnForm onSubmit={handleSubmit} onCancel={() => router.back()} />
       </div>

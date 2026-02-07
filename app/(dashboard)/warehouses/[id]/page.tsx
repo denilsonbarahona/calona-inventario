@@ -10,11 +10,20 @@ import {
   updateDocument,
   getDocumentsByField,
   createDocument,
+  deleteDocument,
 } from "@/lib/firebase/firestore";
-import { canCreateWarehouse, canManageProducts, canTransferInventory } from "@/lib/utils/permissions";
+import {
+  canCreateWarehouse,
+  canManageProducts,
+  canTransferInventory,
+} from "@/lib/utils/permissions";
 import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
-import WarehouseProductForm from "@/app/components/warehouses/WarehouseProductForm";
-import { Plus, Package, ArrowRight } from "lucide-react";
+import { normalizeWarehouseDoc } from "@/lib/utils/inventoryHelpers";
+import WarehouseProductForm, {
+  type WarehouseProductSubmitPayload,
+} from "@/app/components/warehouses/WarehouseProductForm";
+import WarehouseForm from "@/app/components/warehouses/WarehouseForm";
+import { Plus, Package, ArrowRight, Trash2 } from "lucide-react";
 
 export default function WarehouseDetailPage() {
   const router = useRouter();
@@ -24,11 +33,17 @@ export default function WarehouseDetailPage() {
   const [products, setProducts] = useState<InventoryWarehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [showProductForm, setShowProductForm] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<InventoryWarehouse | null>(null);
+  const [editingProduct, setEditingProduct] =
+    useState<InventoryWarehouse | null>(null);
+  const [showEditWarehouse, setShowEditWarehouse] = useState(false);
 
   useEffect(() => {
     // Permitir acceso a admin y manager para ver bodegas y crear productos
-    if (userData && !canManageProducts(userData.role) && !canCreateWarehouse(userData.role)) {
+    if (
+      userData &&
+      !canManageProducts(userData.role) &&
+      !canCreateWarehouse(userData.role)
+    ) {
       router.push("/warehouses");
       return;
     }
@@ -54,26 +69,38 @@ export default function WarehouseDetailPage() {
 
   const loadProducts = async () => {
     try {
-      const data = await getDocumentsByField("inventory_warehouse", "warehouseId", params.id as string);
+      const data = await getDocumentsByField(
+        "inventory_warehouse",
+        "warehouseId",
+        params.id as string,
+      );
       setProducts(
-        data.map((item) => ({
-          ...item,
-          lastUpdated: convertFirestoreDate(item.lastUpdated),
-        })) as InventoryWarehouse[]
+        data.map((item) => {
+          const normalized = normalizeWarehouseDoc({
+            ...item,
+            id: item.id,
+          });
+          return {
+            ...normalized,
+            lastUpdated: convertFirestoreDate(item.lastUpdated as unknown),
+          } as InventoryWarehouse;
+        }),
       );
     } catch (error) {
       console.error("Error loading products:", error);
     }
   };
 
-  const handleUpdate = async (data: any) => {
+  const handleUpdateWarehouseInfo = async (
+    data: Omit<Warehouse, "id" | "createdAt" | "createdBy">,
+  ) => {
     if (!warehouse) return;
-
     await updateDocument("warehouses", warehouse.id, data);
-    router.push("/warehouses");
+    await loadWarehouse();
+    setShowEditWarehouse(false);
   };
 
-  const handleProductSubmit = async (data: Omit<InventoryWarehouse, "id" | "lastUpdated">) => {
+  const handleProductSubmit = async (data: WarehouseProductSubmitPayload) => {
     if (editingProduct) {
       await updateDocument("inventory_warehouse", editingProduct.id, {
         ...data,
@@ -87,13 +114,39 @@ export default function WarehouseDetailPage() {
     }
     setShowProductForm(false);
     setEditingProduct(null);
-    loadProducts();
+    await loadProducts();
   };
 
   const handleEditProduct = (product: InventoryWarehouse) => {
     setEditingProduct(product);
     setShowProductForm(true);
   };
+
+  const handleDeleteProduct = async (product: InventoryWarehouse) => {
+    const label = product.hasVariations
+      ? `${product.name} (y todas sus variaciones)`
+      : product.name;
+    if (
+      !window.confirm(
+        `¿Eliminar "${label}" de esta bodega? Esta acción no se puede deshacer.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteDocument("inventory_warehouse", product.id);
+      await loadProducts();
+    } catch (error) {
+      console.error("Error al eliminar producto:", error);
+      alert("No se pudo eliminar el producto. Intenta de nuevo.");
+    }
+  };
+
+  const totalQuantity = (doc: InventoryWarehouse) =>
+    (doc.variations ?? []).reduce(
+      (sum, v) => sum + (Number(v.quantity) ?? 0),
+      0,
+    );
 
   if (loading) {
     return <div>Cargando...</div>;
@@ -156,29 +209,44 @@ export default function WarehouseDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">Información de la Bodega</h2>
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">
+            Información de la Bodega
+          </h2>
           <div className="space-y-2">
             <p className="text-sm text-gray-600">
               <span className="font-medium">Nombre:</span> {warehouse.name}
             </p>
             {warehouse.address && (
               <p className="text-sm text-gray-600">
-                <span className="font-medium">Dirección:</span> {warehouse.address}
+                <span className="font-medium">Dirección:</span>{" "}
+                {warehouse.address}
               </p>
             )}
           </div>
-          <button
-            onClick={() => {
-              const form = document.createElement("form");
-              form.style.display = "none";
-              document.body.appendChild(form);
-              // This will be handled by a modal or separate page
-            }}
-            className="mt-4 text-purple-600 hover:text-purple-700 text-sm"
-          >
-            Editar información
-          </button>
+          {userData && canCreateWarehouse(userData.role) && (
+            <button
+              onClick={() => setShowEditWarehouse(true)}
+              className="mt-4 text-purple-600 hover:text-purple-700 text-sm"
+            >
+              Editar información
+            </button>
+          )}
         </div>
+
+        {showEditWarehouse && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                Editar información de la bodega
+              </h3>
+              <WarehouseForm
+                warehouse={warehouse}
+                onSubmit={handleUpdateWarehouseInfo}
+                onCancel={() => setShowEditWarehouse(false)}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center space-x-3 mb-4">
@@ -190,9 +258,11 @@ export default function WarehouseDetailPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">Inventario Total</h2>
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">
+            Inventario Total
+          </h2>
           <p className="text-3xl font-bold text-gray-800">
-            {products.reduce((sum, p) => sum + (p.quantity || 0), 0)}
+            {products.reduce((sum, doc) => sum + totalQuantity(doc), 0)}
           </p>
           <p className="text-sm text-gray-500">unidades en total</p>
         </div>
@@ -200,7 +270,9 @@ export default function WarehouseDetailPage() {
 
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800">Productos en esta bodega</h2>
+          <h2 className="text-xl font-semibold text-gray-800">
+            Productos en esta bodega
+          </h2>
         </div>
         {products.length === 0 ? (
           <div className="p-6 text-center text-gray-500">
@@ -238,53 +310,75 @@ export default function WarehouseDetailPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {products.map((product) => {
-                  // Obtener todas las variaciones del producto
-                  const variations = product.variations || [];
-                  const variationValues = variations.map((v) => v.value).filter(Boolean);
-                  const variationsText = variationValues.length > 0 
-                    ? variationValues.join(" - ")
-                    : null;
-
+                {products.map((doc) => {
+                  const qty = totalQuantity(doc);
+                  const variationsWithQty = doc.variations ?? [];
+                  const hasMultiple = variationsWithQty.length > 1;
                   return (
-                    <tr key={product.id} className="hover:bg-gray-50">
+                    <tr key={doc.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <div className="flex items-center">
-                          {product.images && product.images.length > 0 && (
+                          {doc.images && doc.images.length > 0 && (
                             <img
-                              src={product.images[0]}
-                              alt={product.name}
+                              src={doc.images[0]}
+                              alt={doc.name}
                               className="h-10 w-10 rounded-lg object-cover mr-3"
                             />
                           )}
                           <div>
-                            <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                            {variationsText && (
-                              <div className="text-xs text-gray-400 mt-1">{variationsText}</div>
-                            )}
-                            {product.barcode && (
-                              <div className="text-sm text-gray-500 mt-1">Código: {product.barcode}</div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {doc.name}
+                            </div>
+                            {hasMultiple ? (
+                              <div className="text-xs text-gray-500 mt-1 space-y-0.5 font-medium">
+                                {variationsWithQty.map((v) => (
+                                  <div key={v.id}>
+                                    {v.type}: {v.value} — {v.quantity ?? 0}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : variationsWithQty[0] ? (
+                              <div className="text-xs text-gray-500 mt-1 font-medium">
+                                {variationsWithQty[0].type}:{" "}
+                                {variationsWithQty[0].value} —{" "}
+                                {variationsWithQty[0].quantity ?? 0}
+                              </div>
+                            ) : null}
+                            {doc.barcode && (
+                              <div className="text-sm text-gray-500 mt-1">
+                                Código: {doc.barcode}
+                              </div>
                             )}
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {product.quantity}
+                        {qty}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${product.purchasePrice?.toFixed(2) || "0.00"}
+                        ${doc.purchasePrice?.toFixed(2) || "0.00"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${product.salePrice?.toFixed(2) || "0.00"}
+                        ${doc.salePrice?.toFixed(2) || "0.00"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         {userData && canManageProducts(userData.role) && (
-                          <button
-                            onClick={() => handleEditProduct(product)}
-                            className="text-purple-600 hover:text-purple-900"
-                          >
-                            Editar
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => handleEditProduct(doc)}
+                              className="text-purple-600 hover:text-purple-900"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProduct(doc)}
+                              className="text-red-600 hover:text-red-800 flex items-center gap-1"
+                              title="Eliminar de la bodega"
+                            >
+                              <Trash2 size={16} />
+                              Eliminar
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
