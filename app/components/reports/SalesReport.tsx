@@ -3,18 +3,31 @@
 import { useState, useEffect } from "react";
 import { Sale, InventoryBranch, Branch } from "@/types";
 import { getDocuments, getDocument } from "@/lib/firebase/firestore";
-import { collection, query, where, orderBy, Timestamp, getDocs } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  Timestamp,
+  getDocs,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
-import { calculateTotalSales, calculateTotalProfit } from "@/lib/utils/calculations";
+import {
+  calculateTotalSales,
+  calculateTotalProfit,
+} from "@/lib/utils/calculations";
 import { format } from "date-fns";
 import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
+import { formatCurrency } from "@/lib/utils/formatCurrency";
 
 export default function SalesReport() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
-  const [inventoryItems, setInventoryItems] = useState<Record<string, InventoryBranch>>({});
+  const [inventoryItems, setInventoryItems] = useState<
+    Record<string, InventoryBranch>
+  >({});
   const [branches, setBranches] = useState<Record<string, Branch>>({});
 
   useEffect(() => {
@@ -25,9 +38,11 @@ export default function SalesReport() {
     setLoading(true);
     try {
       // Parse dates manually to avoid timezone issues
-      const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
+      const [startYear, startMonth, startDay] = startDate
+        .split("-")
+        .map(Number);
       const start = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
-      
+
       const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
       const end = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
 
@@ -36,7 +51,7 @@ export default function SalesReport() {
         salesRef,
         where("soldAt", ">=", Timestamp.fromDate(start)),
         where("soldAt", "<=", Timestamp.fromDate(end)),
-        orderBy("soldAt", "desc")
+        orderBy("soldAt", "desc"),
       );
 
       const querySnapshot = await getDocs(q);
@@ -53,7 +68,7 @@ export default function SalesReport() {
         ...new Set(
           salesData
             .map((s) => s.inventoryBranchId)
-            .filter((id): id is string => !!id)
+            .filter((id): id is string => !!id),
         ),
       ];
       const branchIds = [...new Set(salesData.map((s) => s.branchId))];
@@ -95,7 +110,9 @@ export default function SalesReport() {
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Filtros</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha inicio</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha inicio
+            </label>
             <input
               type="date"
               value={startDate}
@@ -104,7 +121,9 @@ export default function SalesReport() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha fin</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha fin
+            </label>
             <input
               type="date"
               value={endDate}
@@ -126,11 +145,15 @@ export default function SalesReport() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-blue-50 p-4 rounded-lg">
             <p className="text-sm text-gray-600">Total Ventas</p>
-            <p className="text-2xl font-bold text-blue-600">${totalSales.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-blue-600">
+              {formatCurrency(totalSales)}
+            </p>
           </div>
           <div className="bg-green-50 p-4 rounded-lg">
             <p className="text-sm text-gray-600">Total Ganancias</p>
-            <p className="text-2xl font-bold text-green-600">${totalProfit.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-green-600">
+              {formatCurrency(totalProfit)}
+            </p>
           </div>
           <div className="bg-purple-50 p-4 rounded-lg">
             <p className="text-sm text-gray-600">Número de Ventas</p>
@@ -140,7 +163,9 @@ export default function SalesReport() {
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <h2 className="text-xl font-semibold text-gray-700 p-6">Detalle de Ventas</h2>
+        <h2 className="text-xl font-semibold text-gray-700 p-6">
+          Detalle de Ventas
+        </h2>
         {loading ? (
           <div className="p-6 text-center">Cargando...</div>
         ) : (
@@ -173,7 +198,10 @@ export default function SalesReport() {
             <tbody className="bg-white divide-y divide-gray-200">
               {sales.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                  <td
+                    colSpan={7}
+                    className="px-6 py-4 text-center text-gray-500"
+                  >
                     No hay ventas en el período seleccionado
                   </td>
                 </tr>
@@ -196,13 +224,15 @@ export default function SalesReport() {
                       {sale.quantity}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      ${sale.unitPrice.toFixed(2)}
+                      {formatCurrency(sale.unitPrice)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      ${sale.totalPrice.toFixed(2)}
+                      {formatCurrency(sale.totalPrice)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
-                      ${((sale.unitPrice - sale.purchasePrice) * sale.quantity).toFixed(2)}
+                      {formatCurrency(
+                        (sale.unitPrice - sale.purchasePrice) * sale.quantity,
+                      )}
                     </td>
                   </tr>
                 ))

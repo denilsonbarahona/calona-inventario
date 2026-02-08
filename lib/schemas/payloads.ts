@@ -109,9 +109,24 @@ export const zCreateInventoryBranchPayload = () =>
 export const zCreateSalePayload = () =>
   z.object({
     inventoryBranchId: z.string().min(1, "inventoryBranchId es requerido"),
+    variationId: z.string().optional(),
     quantity: z.number().int().positive("La cantidad debe ser mayor a 0"),
     branchId: z.string().min(1, "branchId es requerido"),
     userId: z.string().min(1, "userId es requerido"),
+  });
+
+// Sales batch payload (checkout: multiple items in one batch)
+export const zCreateSalesPayload = () =>
+  z.object({
+    branchId: z.string().min(1, "branchId es requerido"),
+    userId: z.string().min(1, "userId es requerido"),
+    items: z.array(
+      z.object({
+        inventoryBranchId: z.string().min(1, "inventoryBranchId es requerido"),
+        variationId: z.string().optional(),
+        quantity: z.number().int().positive("La cantidad debe ser mayor a 0"),
+      }),
+    ),
   });
 
 // Transfer payload
@@ -153,6 +168,9 @@ export type CreateInventoryBranchPayload = z.infer<
   ReturnType<typeof zCreateInventoryBranchPayload>
 >;
 export type CreateSalePayload = z.infer<ReturnType<typeof zCreateSalePayload>>;
+export type CreateSalesPayload = z.infer<
+  ReturnType<typeof zCreateSalesPayload>
+>;
 export type CreateTransferPayload = z.infer<
   ReturnType<typeof zCreateTransferPayload>
 >;

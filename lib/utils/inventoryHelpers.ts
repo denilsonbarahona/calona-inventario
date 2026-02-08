@@ -7,7 +7,7 @@ import type {
 
 const DEFAULT_VARIATION: ProductVariation = {
   id: "default",
-  type: "default",
+  type: "Único",
   value: "Único",
 };
 
@@ -180,6 +180,31 @@ export function getQuantityByVariation(
   variationId: string,
 ): number {
   return doc.variations?.find((v) => v.id === variationId)?.quantity ?? 0;
+}
+
+/** Cantidad para un variationId en un doc de sucursal (inventory_branch). */
+export function getQuantityByVariationBranch(
+  item: {
+    variations?: {
+      id: string;
+      type?: string;
+      value?: string;
+      quantity?: number;
+    }[];
+  },
+  variationId: string,
+): number {
+  return item.variations?.find((v) => v.id === variationId)?.quantity ?? 0;
+}
+
+/** Etiqueta de variación por id (ej: "Talla: M") a partir del ítem de sucursal. */
+export function getVariationLabelById(
+  item: { variations?: { id: string; type?: string; value?: string }[] },
+  variationId: string,
+): string {
+  const v = item.variations?.find((x) => x.id === variationId);
+  if (!v) return "";
+  return `${v.type ?? "?"}: ${v.value ?? "?"}`;
 }
 
 /**

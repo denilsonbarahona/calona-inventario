@@ -144,9 +144,11 @@ export default function VariationManager({
                   <select
                     value={row.type}
                     onChange={(e) => updateRow(row.id, "type", e.target.value)}
+                    required
                     className="w-full pl-3 pr-8 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-sm text-gray-900 appearance-none cursor-pointer hover:border-gray-400"
                   >
                     <option value="">Seleccione tipo</option>
+                    <option value="Único">Único</option>
                     <option value="talla">Talla</option>
                     <option value="color">Color</option>
                     <option value="tamaño">Tamaño</option>

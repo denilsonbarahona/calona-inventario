@@ -7,6 +7,7 @@ import {
 } from "@/types";
 import { Package, Trash2 } from "lucide-react";
 import { getVariationLabel } from "@/lib/utils/inventoryHelpers";
+import { formatCurrency } from "@/lib/utils/formatCurrency";
 
 type InventoryItem =
   | InventoryWarehouse
@@ -186,23 +187,22 @@ export default function InventoryTable({
                     {type === "warehouse" && (
                       <>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700">
-                          $
-                          {(item as InventoryWarehouse).purchasePrice?.toFixed(
-                            2,
-                          ) || "0.00"}
+                          {formatCurrency(
+                            (item as InventoryWarehouse).purchasePrice ?? 0,
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-emerald-600">
-                          $
-                          {(item as InventoryWarehouse).salePrice?.toFixed(2) ||
-                            "0.00"}
+                          {formatCurrency(
+                            (item as InventoryWarehouse).salePrice ?? 0,
+                          )}
                         </td>
                       </>
                     )}
                     {type === "branch" && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-emerald-600">
-                        $
-                        {(item as InventoryBranch).salePrice?.toFixed(2) ||
-                          "0.00"}
+                        {formatCurrency(
+                          (item as InventoryBranch).salePrice ?? 0,
+                        )}
                       </td>
                     )}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

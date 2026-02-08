@@ -11,6 +11,7 @@ interface ReturnFormProps {
     branchId: string;
     warehouseId: string;
     inventoryBranchId: string;
+    variationId: string;
     quantity: number;
   }) => Promise<void>;
   onCancel: () => void;
@@ -21,6 +22,7 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
     branchId: "",
     warehouseId: "",
     inventoryBranchId: "",
+    variationId: "",
     quantity: 0,
   });
   const [quantityInput, setQuantityInput] = useState<string>("1");
@@ -40,7 +42,11 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
       loadInventory();
     } else {
       setInventory([]);
-      setFormData((prev) => ({ ...prev, inventoryBranchId: "" }));
+      setFormData((prev) => ({
+        ...prev,
+        inventoryBranchId: "",
+        variationId: "",
+      }));
     }
   }, [formData.branchId]);
 
@@ -85,7 +91,34 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
   const selectedInventoryItem = inventory.find(
     (item) => item.id === formData.inventoryBranchId,
   );
-  const availableQuantity = selectedInventoryItem?.quantity || 0;
+  const variationsWithQty: {
+    id: string;
+    type: string;
+    value: string;
+    quantity: number;
+  }[] =
+    (selectedInventoryItem?.variations?.length ?? 0) > 0
+      ? (selectedInventoryItem.variations ?? []).map((v) => ({
+          id: v.id,
+          type: v.type,
+          value: v.value,
+          quantity: (v as { quantity?: number }).quantity ?? 0,
+        }))
+      : selectedInventoryItem
+        ? [
+            {
+              id: "default",
+              type: "Único",
+              value: "Único",
+              quantity: selectedInventoryItem.quantity ?? 0,
+            },
+          ]
+        : [];
+  const selectedVariation = variationsWithQty.find(
+    (v) => v.id === formData.variationId,
+  );
+  const availableQuantity =
+    selectedVariation?.quantity ?? selectedInventoryItem?.quantity ?? 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +127,8 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
     if (
       !formData.branchId ||
       !formData.warehouseId ||
-      !formData.inventoryBranchId
+      !formData.inventoryBranchId ||
+      !formData.variationId
     ) {
       setError("Todos los campos son requeridos");
       return;
@@ -106,7 +140,7 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
     }
 
     if (formData.quantity > availableQuantity) {
-      setError("No hay suficiente inventario disponible en la sucursal");
+      setError("No hay suficiente inventario disponible para esta variación");
       return;
     }
 
@@ -116,6 +150,7 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
         branchId: formData.branchId,
         warehouseId: formData.warehouseId,
         inventoryBranchId: formData.inventoryBranchId,
+        variationId: formData.variationId,
         quantity: formData.quantity,
       });
     } catch (err: any) {
@@ -220,12 +255,35 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
         <div className="relative">
           <select
             value={formData.inventoryBranchId}
-            onChange={(e) =>
+            onChange={(e) => {
+              const id = e.target.value;
+              const item = inventory.find((i) => i.id === id);
+              const vars =
+                (item?.variations?.length ?? 0) > 0
+                  ? (item!.variations ?? []).map((v) => ({
+                      id: v.id,
+                      type: v.type,
+                      value: v.value,
+                      quantity: (v as { quantity?: number }).quantity ?? 0,
+                    }))
+                  : item
+                    ? [
+                        {
+                          id: "default",
+                          type: "Único",
+                          value: "Único",
+                          quantity: item.quantity ?? 0,
+                        },
+                      ]
+                    : [];
               setFormData({
                 ...formData,
-                inventoryBranchId: e.target.value,
-              })
-            }
+                inventoryBranchId: id,
+                variationId: vars[0]?.id ?? "",
+                quantity: 0,
+              });
+              setQuantityInput("1");
+            }}
             required
             disabled={!formData.branchId}
             className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400 disabled:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-500"
@@ -261,6 +319,63 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
         {inventory.length === 0 && formData.branchId && (
           <p className="text-sm text-gray-500 mt-1">
             No hay productos disponibles en esta sucursal
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Variación *
+        </label>
+        <div className="relative">
+          <select
+            value={formData.variationId}
+            onChange={(e) => {
+              const vid = e.target.value;
+              const v = variationsWithQty.find((x) => x.id === vid);
+              setFormData({
+                ...formData,
+                variationId: vid,
+                quantity: Math.min(formData.quantity, v?.quantity ?? 0),
+              });
+              setQuantityInput(
+                String(Math.min(formData.quantity, v?.quantity ?? 0)),
+              );
+            }}
+            required
+            disabled={!formData.inventoryBranchId}
+            className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 appearance-none cursor-pointer hover:border-gray-400 disabled:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-500"
+          >
+            <option value="">
+              {formData.inventoryBranchId
+                ? "Seleccione variación"
+                : "Seleccione un producto primero"}
+            </option>
+            {variationsWithQty.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.type}: {v.value} — {v.quantity} disponibles
+              </option>
+            ))}
+          </select>
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+            <svg
+              className="w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </div>
+        </div>
+        {!formData.variationId && formData.inventoryBranchId && (
+          <p className="text-sm text-amber-600 mt-1">
+            Debe seleccionar una variación para poder retornar
           </p>
         )}
       </div>

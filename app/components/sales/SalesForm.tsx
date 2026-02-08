@@ -4,8 +4,13 @@ import { useState, useMemo } from "react";
 import { Search, ShoppingCart, X, Plus, Minus } from "lucide-react";
 import { toast } from "react-toastify";
 import { useInventoryBranch } from "@/lib/hooks/useInventory";
-import { useCreateSale } from "@/lib/hooks/useSales";
-import { getVariationLabel } from "@/lib/utils/inventoryHelpers";
+import { useCreateSales } from "@/lib/hooks/useSales";
+import {
+  getVariationLabel,
+  getQuantityByVariationBranch,
+  getVariationLabelById,
+} from "@/lib/utils/inventoryHelpers";
+import { formatCurrency } from "@/lib/utils/formatCurrency";
 
 interface SalesFormProps {
   branchId: string;
@@ -15,6 +20,7 @@ interface SalesFormProps {
 
 interface CartItem {
   inventoryBranchId: string;
+  variationId: string;
   quantity: number;
   name: string;
   variation?: string;
@@ -33,6 +39,7 @@ export default function SalesForm({
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     null,
   );
+  const [selectedVariationId, setSelectedVariationId] = useState<string>("");
   const [quantity, setQuantity] = useState(1);
   const [quantityInput, setQuantityInput] = useState<string>("1");
 
@@ -63,56 +70,70 @@ export default function SalesForm({
     }
   }, [allInventory, isLoadingInventory, branchId]);
 
-  // Filtrar productos con useMemo en lugar de useEffect
-  const filteredInventory = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return [];
-    }
-
-    const searchLower = searchTerm.toLowerCase().trim();
-    return allInventory.filter((item) => {
-      const nameMatch = item.name?.toLowerCase().includes(searchLower) || false;
-      const barcodeMatch =
-        item.barcode?.toLowerCase().includes(searchLower) || false;
-      return nameMatch || barcodeMatch;
-    });
-  }, [searchTerm, allInventory]);
-
-  // Filtrar solo productos con stock > 0
+  // Filtrar solo productos con stock > 0 (base para búsqueda y lista)
   const availableInventory = useMemo(() => {
     return allInventory.filter((item) => (item.quantity || 0) > 0);
   }, [allInventory]);
 
+  // Búsqueda por contains: nombre, código de barras, SKU o etiqueta de variación (nunca por igualdad)
+  const filteredInventory = useMemo(() => {
+    const term = searchTerm.trim();
+    if (!term) {
+      return availableInventory;
+    }
+    const searchLower = term.toLowerCase();
+    return availableInventory.filter((item) => {
+      const nameMatch = (item.name ?? "").toLowerCase().includes(searchLower);
+      const barcodeMatch = (item.barcode ?? "")
+        .toLowerCase()
+        .includes(searchLower);
+      const variationLabel = getVariationLabel(item) ?? "";
+      const variationMatch = variationLabel.toLowerCase().includes(searchLower);
+      const skuMatch = (item.variations ?? []).some((v) =>
+        ((v as { sku?: string }).sku ?? "").toLowerCase().includes(searchLower),
+      );
+      return nameMatch || barcodeMatch || variationMatch || skuMatch;
+    });
+  }, [searchTerm, availableInventory]);
+
   const addToCart = () => {
-    if (!selectedProductId || quantity <= 0) return;
+    if (!selectedProductId || !selectedVariationId || quantity <= 0) return;
 
     const product = availableInventory.find(
       (item) => item.id === selectedProductId,
     );
     if (!product) return;
 
-    if (product.quantity < quantity) {
-      toast.warning(`No hay suficiente stock. Disponible: ${product.quantity}`);
+    const variationStock = getQuantityByVariationBranch(
+      product,
+      selectedVariationId,
+    );
+    if (variationStock < quantity) {
+      toast.warning(
+        `No hay suficiente stock para esta variación. Disponible: ${variationStock}`,
+      );
       return;
     }
 
-    // Verificar si ya está en el carrito
     const existingIndex = cart.findIndex(
-      (item) => item.inventoryBranchId === selectedProductId,
+      (item) =>
+        item.inventoryBranchId === selectedProductId &&
+        item.variationId === selectedVariationId,
     );
 
     const cartItem: CartItem = {
       inventoryBranchId: product.id,
+      variationId: selectedVariationId,
       quantity,
       name: product.name,
-      variation: getVariationLabel(product) || undefined,
+      variation:
+        getVariationLabelById(product, selectedVariationId) || undefined,
       unitPrice: product.salePrice || 0,
       purchasePrice: product.purchasePrice || 0,
-      availableStock: product.quantity,
+      availableStock: variationStock,
     };
 
     if (existingIndex >= 0) {
-      // Actualizar cantidad si ya existe
       const updatedCart = [...cart];
       const newQuantity = updatedCart[existingIndex].quantity + quantity;
       if (newQuantity > updatedCart[existingIndex].availableStock) {
@@ -124,12 +145,11 @@ export default function SalesForm({
       updatedCart[existingIndex].quantity = newQuantity;
       setCart(updatedCart);
     } else {
-      // Agregar nuevo item
       setCart([...cart, cartItem]);
     }
 
-    // Reset
     setSelectedProductId(null);
+    setSelectedVariationId("");
     setQuantity(1);
     setQuantityInput("1");
     setSearchTerm("");
@@ -156,8 +176,8 @@ export default function SalesForm({
     setCart(updatedCart);
   };
 
-  // Hook para crear ventas
-  const { mutate: createSale, isPending: isCreatingSale } = useCreateSale({
+  // Hook para crear ventas en lote (un batch por checkout)
+  const { mutate: createSales, isPending: isCreatingSale } = useCreateSales({
     onSuccess: () => {
       setCart([]);
       setSelectedProductId(null);
@@ -174,16 +194,15 @@ export default function SalesForm({
       return;
     }
 
-    // Procesar todas las ventas del carrito
-    // Cada venta se valida automáticamente con Zod en el hook
-    for (const item of cart) {
-      createSale({
+    createSales({
+      branchId,
+      userId,
+      items: cart.map((item) => ({
         inventoryBranchId: item.inventoryBranchId,
+        variationId: item.variationId,
         quantity: item.quantity,
-        branchId,
-        userId,
-      });
-    }
+      })),
+    });
   };
 
   const selectedProduct = useMemo(() => {
@@ -191,6 +210,31 @@ export default function SalesForm({
       ? availableInventory.find((item) => item.id === selectedProductId)
       : null;
   }, [selectedProductId, availableInventory]);
+
+  const variationsWithQtyForSelected = useMemo(() => {
+    if (!selectedProduct) return [];
+    const vars = selectedProduct.variations?.length
+      ? (selectedProduct.variations ?? []).map((v) => ({
+          id: v.id,
+          type: v.type,
+          value: v.value,
+          quantity: (v as { quantity?: number }).quantity ?? 0,
+        }))
+      : [
+          {
+            id: "default",
+            type: "default",
+            value: "Único",
+            quantity: selectedProduct.quantity ?? 0,
+          },
+        ];
+    return vars.filter((v) => v.quantity > 0);
+  }, [selectedProduct]);
+
+  const availableQuantityForVariation =
+    selectedProduct && selectedVariationId
+      ? getQuantityByVariationBranch(selectedProduct, selectedVariationId)
+      : 0;
 
   const total = cart.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
@@ -214,7 +258,7 @@ export default function SalesForm({
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nombre o código..."
+            placeholder="Buscar por nombre, código, SKU o variación..."
             className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm text-gray-900 placeholder:text-gray-400"
           />
         </div>
@@ -247,75 +291,91 @@ export default function SalesForm({
             </div>
           )}
 
-        {/* Lista de productos filtrados (solo se muestra cuando hay búsqueda) */}
-        {searchTerm.trim() && (
-          <div className="flex-1 overflow-y-auto space-y-2 mb-4">
-            {isLoadingInventory ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
-                <p className="text-sm">Cargando productos...</p>
-              </div>
-            ) : filteredInventory.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                <Search size={48} className="mb-4 opacity-50" />
-                <p className="text-sm">No se encontraron productos</p>
-                <p className="text-xs mt-2">
-                  Intenta con otro término de búsqueda
-                </p>
-              </div>
-            ) : (
-              filteredInventory.map((item) => {
-                const variationLabel = getVariationLabel(item);
+        {/* Lista de productos: con búsqueda vacía se muestran todos los disponibles; con texto se filtra por contains (nombre, código, variación) */}
+        <div className="flex-1 overflow-y-auto space-y-2 mb-4">
+          {isLoadingInventory ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
+              <p className="text-sm">Cargando productos...</p>
+            </div>
+          ) : filteredInventory.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+              <Search size={48} className="mb-4 opacity-50" />
+              <p className="text-sm">
+                {searchTerm.trim()
+                  ? "No se encontraron productos"
+                  : "No hay productos con stock en esta sucursal"}
+              </p>
+              <p className="text-xs mt-2">
+                {searchTerm.trim()
+                  ? "Se busca por nombre, código o variación (contiene el texto)"
+                  : "Contacta al administrador para agregar inventario"}
+              </p>
+            </div>
+          ) : (
+            filteredInventory.map((item) => {
+              const variationLabel = getVariationLabel(item);
 
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedProductId(item.id);
-                      setQuantity(1);
-                      setQuantityInput("1");
-                    }}
-                    disabled={isLoadingInventory || item.quantity <= 0}
-                    className={`w-full p-3 text-left bg-gray-50 hover:bg-indigo-50 rounded-lg transition-all duration-200 border border-gray-200 hover:border-indigo-300 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
-                      selectedProductId === item.id
-                        ? "bg-indigo-50 border-indigo-300"
-                        : ""
-                    }`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <p className="font-semibold text-sm text-gray-900 mb-1">
-                          {item.name}
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    const vars =
+                      (item.variations?.length ?? 0) > 0
+                        ? (item.variations ?? []).map((v) => ({
+                            id: v.id,
+                            quantity:
+                              (v as { quantity?: number }).quantity ?? 0,
+                          }))
+                        : [{ id: "default", quantity: item.quantity ?? 0 }];
+                    const firstWithStock = vars.find((v) => v.quantity > 0);
+                    setSelectedProductId(item.id);
+                    setSelectedVariationId(
+                      firstWithStock?.id ?? vars[0]?.id ?? "default",
+                    );
+                    setQuantity(1);
+                    setQuantityInput("1");
+                  }}
+                  disabled={isLoadingInventory || item.quantity <= 0}
+                  className={`w-full p-3 text-left bg-gray-50 hover:bg-indigo-50 rounded-lg transition-all duration-200 border border-gray-200 hover:border-indigo-300 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+                    selectedProductId === item.id
+                      ? "bg-indigo-50 border-indigo-300"
+                      : ""
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm text-gray-900 mb-1">
+                        {item.name}
+                      </p>
+                      {variationLabel && (
+                        <p className="text-xs text-gray-500 mb-1">
+                          {variationLabel}
                         </p>
-                        {variationLabel && (
-                          <p className="text-xs text-gray-500 mb-1">
-                            {variationLabel}
-                          </p>
-                        )}
-                        {item.barcode && (
-                          <p className="text-xs text-gray-400">
-                            Código: {item.barcode}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right ml-4">
-                        <p className="font-bold text-sm text-indigo-600">
-                          ${(item.salePrice || 0).toFixed(2)}
+                      )}
+                      {item.barcode && (
+                        <p className="text-xs text-gray-400">
+                          Código: {item.barcode}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Stock: {item.quantity}
-                        </p>
-                      </div>
+                      )}
                     </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        )}
+                    <div className="text-right ml-4">
+                      <p className="font-bold text-sm text-indigo-600">
+                        {formatCurrency(item.salePrice || 0)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Stock: {item.quantity}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
 
-        {/* Producto seleccionado y cantidad */}
+        {/* Producto seleccionado, variación y cantidad */}
         {selectedProduct && (
           <div className="mt-auto p-4 bg-indigo-50/50 rounded-lg border border-indigo-200/50">
             <div className="flex justify-between items-start mb-3">
@@ -324,16 +384,17 @@ export default function SalesForm({
                   {selectedProduct.name}
                 </p>
                 <p className="text-xs text-gray-600 mt-1">
-                  Precio: ${(selectedProduct.salePrice || 0).toFixed(2)}
+                  Precio: {formatCurrency(selectedProduct.salePrice || 0)}
                 </p>
                 <p className="text-xs text-gray-600">
-                  Disponible: {selectedProduct.quantity} unidades
+                  Disponible: {availableQuantityForVariation} unidades
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => {
                   setSelectedProductId(null);
+                  setSelectedVariationId("");
                   setQuantity(1);
                 }}
                 className="text-gray-400 hover:text-gray-600 transition-colors ml-2"
@@ -342,6 +403,36 @@ export default function SalesForm({
                 <X size={18} />
               </button>
             </div>
+
+            {variationsWithQtyForSelected.length > 0 && (
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Variación *
+                </label>
+                <select
+                  value={selectedVariationId}
+                  onChange={(e) => {
+                    const vid = e.target.value;
+                    setSelectedVariationId(vid);
+                    const qty = getQuantityByVariationBranch(
+                      selectedProduct,
+                      vid,
+                    );
+                    const newQty = Math.min(quantity, qty);
+                    setQuantity(newQty);
+                    setQuantityInput(String(newQty));
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900"
+                >
+                  {variationsWithQtyForSelected.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.type}: {v.value} — {v.quantity} disponibles
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <input
                 type="text"
@@ -349,20 +440,17 @@ export default function SalesForm({
                 value={quantityInput}
                 onChange={(e) => {
                   const value = e.target.value;
-                  // Permitir valores vacíos y solo números
                   if (value === "" || /^\d+$/.test(value)) {
                     setQuantityInput(value);
                     if (value !== "") {
                       const val = parseInt(value, 10);
                       if (!isNaN(val)) {
-                        // Validar que no exceda el máximo disponible
-                        const maxQuantity = selectedProduct.quantity;
+                        const maxQuantity = availableQuantityForVariation;
                         const finalVal = Math.min(
                           Math.max(1, val),
                           maxQuantity,
                         );
                         setQuantity(finalVal);
-                        // Si el valor fue ajustado al máximo, actualizar el input
                         if (val > maxQuantity) {
                           setQuantityInput(maxQuantity.toString());
                         }
@@ -371,25 +459,24 @@ export default function SalesForm({
                   }
                 }}
                 onBlur={(e) => {
-                  // Si está vacío al perder el foco, restaurar a 1
                   if (e.target.value === "") {
                     setQuantityInput("1");
                     setQuantity(1);
                   } else {
-                    // Asegurar que el input muestre el valor correcto
                     setQuantityInput(quantity.toString());
                   }
                 }}
-                onFocus={(e) => {
-                  // Seleccionar todo el texto al hacer focus para facilitar reemplazo
-                  e.target.select();
-                }}
+                onFocus={(e) => e.target.select()}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900"
               />
               <button
                 type="button"
                 onClick={addToCart}
-                disabled={quantity <= 0 || quantity > selectedProduct.quantity}
+                disabled={
+                  quantity <= 0 ||
+                  !selectedVariationId ||
+                  quantity > availableQuantityForVariation
+                }
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
               >
                 Agregar
@@ -438,7 +525,7 @@ export default function SalesForm({
                         </p>
                       )}
                       <p className="text-xs text-gray-500 mt-1">
-                        ${item.unitPrice.toFixed(2)} c/u
+                        {formatCurrency(item.unitPrice)} c/u
                       </p>
                     </div>
                     <button
@@ -518,7 +605,7 @@ export default function SalesForm({
                       <Plus size={14} className="text-gray-900" />
                     </button>
                     <span className="ml-auto font-semibold text-sm text-gray-900">
-                      ${(item.unitPrice * item.quantity).toFixed(2)}
+                      {formatCurrency(item.unitPrice * item.quantity)}
                     </span>
                   </div>
                 </div>
@@ -535,7 +622,7 @@ export default function SalesForm({
                 Total:
               </span>
               <span className="text-xl font-bold text-indigo-600">
-                ${total.toFixed(2)}
+                {formatCurrency(total)}
               </span>
             </div>
             <button

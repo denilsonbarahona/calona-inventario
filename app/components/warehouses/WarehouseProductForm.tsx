@@ -13,7 +13,7 @@ import VariationManager from "@/app/components/products/VariationManager";
 
 const DEFAULT_VARIATION: ProductVariation = {
   id: "default",
-  type: "default",
+  type: "Único",
   value: "Único",
 };
 
@@ -212,10 +212,21 @@ export default function WarehouseProductForm({
           (v) => v.id === "default",
         );
         const variationsWithQuantity: ProductVariationWithQuantity[] =
-          toUse.map((vq) => ({
-            ...vq.variation,
-            quantity: Math.max(0, vq.quantity),
-          }));
+          toUse.map((vq) => {
+            const formVar = formData.variations.find(
+              (v) => v.id === vq.variation.id,
+            );
+            const variation = formVar ?? vq.variation;
+            return {
+              id: variation.id,
+              type: variation.type,
+              value: variation.value,
+              ...(variation.sku != null && variation.sku !== ""
+                ? { sku: variation.sku }
+                : {}),
+              quantity: Math.max(0, vq.quantity),
+            };
+          });
         if (hasDefaultInForm) {
           const existing = variationsWithQuantity.find(
             (v) => v.id === "default",
@@ -223,9 +234,17 @@ export default function WarehouseProductForm({
           if (existing) {
             existing.quantity = Math.max(0, formData.quantity);
           } else {
+            const defaultFormVar = formData.variations.find(
+              (v) => v.id === "default",
+            );
+            const defaultVariation = defaultFormVar ?? DEFAULT_VARIATION;
             variationsWithQuantity.push({
-              ...DEFAULT_VARIATION,
               id: "default",
+              type: defaultVariation.type,
+              value: defaultVariation.value,
+              ...(defaultVariation.sku != null && defaultVariation.sku !== ""
+                ? { sku: defaultVariation.sku }
+                : {}),
               quantity: Math.max(0, formData.quantity),
             });
           }

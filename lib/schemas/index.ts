@@ -132,6 +132,7 @@ export const zSale = () =>
     id: z.string(),
     branchId: z.string(),
     inventoryBranchId: z.string(),
+    variationId: z.string().optional(),
     quantity: z.number(),
     unitPrice: z.number(),
     totalPrice: z.number(),

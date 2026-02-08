@@ -19,6 +19,7 @@ import {
 } from "@/lib/utils/permissions";
 import { convertFirestoreDate } from "@/lib/utils/dateHelpers";
 import { normalizeWarehouseDoc } from "@/lib/utils/inventoryHelpers";
+import { formatCurrency } from "@/lib/utils/formatCurrency";
 import WarehouseProductForm, {
   type WarehouseProductSubmitPayload,
 } from "@/app/components/warehouses/WarehouseProductForm";
@@ -356,10 +357,10 @@ export default function WarehouseDetailPage() {
                         {qty}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${doc.purchasePrice?.toFixed(2) || "0.00"}
+                        {formatCurrency(doc.purchasePrice ?? 0)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${doc.salePrice?.toFixed(2) || "0.00"}
+                        {formatCurrency(doc.salePrice ?? 0)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         {userData && canManageProducts(userData.role) && (

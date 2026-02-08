@@ -15,7 +15,6 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import {
-  getDisplayVariation,
   getQuantityByVariation,
   normalizeWarehouseDoc,
 } from "@/lib/utils/inventoryHelpers";
@@ -34,6 +33,7 @@ export default function ReturnTransferPage() {
     branchId: string;
     warehouseId: string;
     inventoryBranchId: string;
+    variationId: string;
     quantity: number;
   }) => {
     if (!userData) return;
@@ -48,28 +48,70 @@ export default function ReturnTransferPage() {
         (item) => item.id === data.inventoryBranchId,
       );
 
-      if (!branchItem || branchItem.quantity < data.quantity) {
-        throw new Error("No hay suficiente inventario en la sucursal");
+      if (!branchItem) {
+        throw new Error("Producto no encontrado en la sucursal");
       }
 
-      const variation = getDisplayVariation(branchItem);
-      const variationId = variation?.id ?? "default";
+      const variationId = data.variationId || "default";
+      const branchVariations =
+        (branchItem.variations?.length ?? 0) > 0
+          ? (branchItem.variations ?? []).map((v) => ({
+              ...v,
+              quantity: (v as { quantity?: number }).quantity ?? 0,
+            }))
+          : [
+              {
+                id: "default",
+                type: "Único",
+                value: "Único",
+                quantity: branchItem.quantity ?? 0,
+              },
+            ];
+      const varIdx = branchVariations.findIndex((v) => v.id === variationId);
+      if (varIdx < 0) {
+        throw new Error("Variación no encontrada en la sucursal");
+      }
+      const variationQty = branchVariations[varIdx].quantity ?? 0;
+      if (variationQty < data.quantity) {
+        throw new Error("No hay suficiente inventario para esta variación");
+      }
 
       const batch = writeBatch(db);
 
-      const newBranchQuantity = branchItem.quantity - data.quantity;
-      if (newBranchQuantity === 0) {
+      const newVarQty = variationQty - data.quantity;
+      branchVariations[varIdx] = {
+        ...branchVariations[varIdx],
+        quantity: newVarQty,
+      };
+      const newBranchVariations = branchVariations.filter(
+        (v) => v.quantity > 0,
+      );
+      const newBranchTotal = newBranchVariations.reduce(
+        (sum, v) => sum + v.quantity,
+        0,
+      );
+
+      if (newBranchTotal === 0) {
         const branchRef = doc(db, "inventory_branch", branchItem.id);
         batch.delete(branchRef);
       } else {
         const branchRef = doc(db, "inventory_branch", branchItem.id);
+        const variationsPayload = newBranchVariations.map((v) => ({
+          id: v.id,
+          type: v.type,
+          value: v.value,
+          quantity: v.quantity,
+          ...(v.sku != null && v.sku !== "" ? { sku: v.sku } : {}),
+        }));
         batch.update(branchRef, {
-          quantity: newBranchQuantity,
+          variations: variationsPayload,
+          quantity: newBranchTotal,
           lastUpdated: Timestamp.now(),
         });
       }
 
       const productId = branchItem.productId ?? null;
+      const variationDef = branchVariations[varIdx];
       let warehouseDocId: string | null = null;
 
       if (productId) {
@@ -100,11 +142,10 @@ export default function ReturnTransferPage() {
                     quantity: v.quantity ?? 0,
                   })),
                   {
-                    ...(variation ?? {
-                      id: variationId,
-                      type: "default",
-                      value: "Único",
-                    }),
+                    id: variationDef.id,
+                    type: variationDef.type,
+                    value: variationDef.value,
+                    sku: variationDef.sku,
                     quantity: newQty,
                   },
                 ];
@@ -119,13 +160,14 @@ export default function ReturnTransferPage() {
 
       if (!warehouseDocId) {
         const warehouseRef = doc(collection(db, "inventory_warehouse"));
-        const variationDef = variation ?? {
-          id: "default",
-          type: "default",
-          value: "Único",
-        };
         const variationsWithQty = [
-          { ...variationDef, quantity: data.quantity },
+          {
+            id: variationDef.id,
+            type: variationDef.type,
+            value: variationDef.value,
+            sku: variationDef.sku,
+            quantity: data.quantity,
+          },
         ];
         warehouseDocId = warehouseRef.id;
         batch.set(warehouseRef, {
@@ -137,7 +179,7 @@ export default function ReturnTransferPage() {
           barcode: branchItem.barcode || null,
           condition: null,
           images: [],
-          hasVariations: (branchItem.variations?.length ?? 0) > 1,
+          hasVariations: false,
           variations: variationsWithQty,
           purchasePrice: branchItem.purchasePrice,
           salePrice: branchItem.salePrice,
