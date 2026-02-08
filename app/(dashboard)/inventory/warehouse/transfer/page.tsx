@@ -58,7 +58,7 @@ export default function TransferPage() {
       );
       const variationDef = warehouseDoc.variations?.find(
         (v) => v.id === data.variationId,
-      ) ?? { id: data.variationId, type: "?", value: "?" };
+      ) ?? { id: data.variationId, type: "?", value: "?", sku: "" };
       const variation = {
         id: variationDef.id,
         type: variationDef.type,

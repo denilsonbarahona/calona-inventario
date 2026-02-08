@@ -39,6 +39,7 @@ export interface ProductVariation {
 
 /** Variación con cantidad (cantidad dentro de cada variación). */
 export interface ProductVariationWithQuantity extends ProductVariation {
+  sku?: string;
   quantity: number;
 }
 

@@ -18,6 +18,7 @@ import {
   getQuantityByVariation,
   normalizeWarehouseDoc,
 } from "@/lib/utils/inventoryHelpers";
+import type { ProductVariation, ProductVariationWithQuantity } from "@/types";
 
 export default function ReturnTransferPage() {
   const router = useRouter();
@@ -53,12 +54,14 @@ export default function ReturnTransferPage() {
       }
 
       const variationId = data.variationId || "default";
-      const branchVariations =
+      const branchVariations: ProductVariationWithQuantity[] =
         (branchItem.variations?.length ?? 0) > 0
-          ? (branchItem.variations ?? []).map((v) => ({
-              ...v,
-              quantity: (v as { quantity?: number }).quantity ?? 0,
-            }))
+          ? (branchItem.variations ?? []).map(
+              (v: ProductVariation & { quantity?: number }) => ({
+                ...v,
+                quantity: v.quantity ?? 0,
+              }),
+            )
           : [
               {
                 id: "default",
@@ -87,7 +90,7 @@ export default function ReturnTransferPage() {
         (v) => v.quantity > 0,
       );
       const newBranchTotal = newBranchVariations.reduce(
-        (sum, v) => sum + v.quantity,
+        (sum: number, v: ProductVariationWithQuantity) => sum + v.quantity,
         0,
       );
 

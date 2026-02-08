@@ -4,6 +4,7 @@ import {
   InventoryWarehouse,
   InventoryBranch,
   InventoryWarehouseRow,
+  ProductVariation,
 } from "@/types";
 import { Package, Trash2 } from "lucide-react";
 import { getVariationLabel } from "@/lib/utils/inventoryHelpers";
@@ -141,7 +142,12 @@ export default function InventoryTable({
                   !variationDisplay &&
                   "variation" in item &&
                   item.variation
-                    ? getVariationLabel(item as { variation: unknown })
+                    ? getVariationLabel(
+                        item as {
+                          variation?: ProductVariation | null;
+                          variations?: ProductVariation[] | null;
+                        },
+                      )
                     : null;
                 const variations = item.variations || [];
                 const variationValues = variations
@@ -153,6 +159,15 @@ export default function InventoryTable({
                   (variationValues.length > 0
                     ? variationValues.join(" - ")
                     : null);
+
+                const quantity =
+                  "quantity" in item &&
+                  typeof (item as { quantity?: number }).quantity === "number"
+                    ? (item as InventoryBranch | InventoryWarehouseRow).quantity
+                    : ((item as InventoryWarehouse).variations?.reduce(
+                        (sum, v) => sum + (v.quantity ?? 0),
+                        0,
+                      ) ?? 0);
 
                 return (
                   <tr
@@ -181,7 +196,7 @@ export default function InventoryTable({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800">
-                        {item.quantity}
+                        {quantity}
                       </span>
                     </td>
                     {type === "warehouse" && (

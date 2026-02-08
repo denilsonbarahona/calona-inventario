@@ -98,7 +98,7 @@ export default function ReturnForm({ onSubmit, onCancel }: ReturnFormProps) {
     quantity: number;
   }[] =
     (selectedInventoryItem?.variations?.length ?? 0) > 0
-      ? (selectedInventoryItem.variations ?? []).map((v) => ({
+      ? (selectedInventoryItem?.variations ?? []).map((v) => ({
           id: v.id,
           type: v.type,
           value: v.value,
